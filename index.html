@@ -120,6 +120,7 @@
     .voice-row .small-btn { flex: 1; padding: 9px 8px; text-align: center; }
     .small-btn.on { background: var(--green); border-color: var(--green); color: white; }
     .voice-hint { margin-top: 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .voice-hint.error { color: #c0262d; }
     .file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .upload-label { min-height: 38px; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 0 8px; border: 1px dashed #b9c7d0; border-radius: 4px; color: var(--green); cursor: pointer; font-size: 11px; font-weight: 700; }
     .upload-label:hover { background: #eef6f6; }
@@ -626,7 +627,10 @@
         <section class="panel pay-panel">
           <div class="panel-title"><h2>Pagamento · Mercado Pago</h2><span class="prize-count" id="pay-status">não configurado</span></div>
           <div class="prize-form">
-            <label class="field-label">Endereço do Checkout Mercado Pago (recomendado)<input id="mp-checkout" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec"></label>
+            <label class="field-label">Access Token do Mercado Pago (recomendado)<input id="mp-token" type="password" autocomplete="off" spellcheck="false" placeholder="APP_USR-..."></label>
+            <button class="add-prize" id="mp-token-save" type="button">Conectar Mercado Pago</button>
+            <div class="voice-hint" id="mp-token-status">Cole o Access Token e clique em Conectar. Ele fica guardado em segurança no servidor do bingo e não aparece mais na tela.</div>
+            <button class="link-btn" id="mp-token-remove" type="button" hidden>Desconectar Mercado Pago</button>
             <div class="pay-or">ou, sem checkout, use a sua chave Pix:</div>
             <label class="field-label">Tipo da chave Pix
               <select id="pix-type">
@@ -648,13 +652,10 @@
               <ol>
                 <li>Entre em <b>mercadopago.com.br/developers</b> com a conta que vai receber e clique em <b>Suas integrações › Criar aplicação</b>. Escolha <b>Pagamentos on-line</b> e <b>Checkout Pro</b>.</li>
                 <li>Na aplicação, abra <b>Credenciais de produção</b> e copie o <b>Access Token</b> (começa com APP_USR-). Não mande para ninguém.</li>
-                <li>Abra <b>script.google.com</b>, clique em <b>Novo projeto</b>, apague o que estiver lá e cole o código do arquivo <b>checkout-mercado-pago.gs</b>. Salve.</li>
-                <li>No menu da esquerda, vá em <b>Configurações do projeto (engrenagem) › Propriedades do script › Adicionar</b>. Nome: <b>MP_ACCESS_TOKEN</b>. Valor: o Access Token. Salve.</li>
-                <li>Clique em <b>Implantar › Nova implantação</b>, tipo <b>App da Web</b>. Executar como: <b>Eu</b>. Quem pode acessar: <b>Qualquer pessoa</b>. Clique em Implantar e autorize com a sua conta Google.</li>
-                <li>Copie o <b>URL do app da Web</b> (termina em /exec) e cole no campo <b>Endereço do Checkout</b> acima.</li>
+                <li>Cole o Access Token no campo <b>Access Token do Mercado Pago</b> acima e clique em <b>Conectar Mercado Pago</b>. Deve aparecer o nome da sua conta.</li>
                 <li>Clique em <b>Ver como o cliente paga</b>. Deve abrir a página do Mercado Pago com Pix e cartão.</li>
               </ol>
-              <p class="pay-note">Com o checkout, quando o cliente paga, a cartela vira <b>Pago</b> sozinha (o bingo confere a cada 5 segundos com a janela aberta, ou pelo botão Conferir pagamentos). Funciona no arquivo aberto no Chrome; no link de prévia o navegador bloqueia.</p>
+              <p class="pay-note">Com o checkout, quando o cliente paga, a cartela vira <b>Pago</b> sozinha (o bingo confere a cada 5 segundos com a janela aberta, ou pelo botão Conferir pagamentos). O token fica guardado no servidor do bingo: nem você nem quem abre o site consegue ver ele de novo.</p>
               <p class="pay-step-title">Sem checkout: chave Pix</p>
               <ol>
                 <li>Abra o app do <b>Mercado Pago</b> e entre na conta que vai receber.</li>
@@ -4937,9 +4938,47 @@ var qrcode = function() {
       return /^https:\/\/[^\s]+$/i.test(link) ? link : '';
     }
 
+    // Conta do Mercado Pago ligada a esta conta do bingo. O Access Token fica só no servidor
+    // (tabela mp_contas + função mercadopago); aqui guardamos apenas o nome da conta.
+    let mpAccount = null;
+
     function checkoutUrl() {
-      const url = String(game.pay.checkout || '').trim();
-      return /^https:\/\/[^\s]+$/i.test(url) ? url : '';
+      return Boolean(sb && currentUser && mpAccount);
+    }
+
+    async function callMercadoPago(params) {
+      if (!sb) throw new Error('Sem conexão com o servidor.');
+      const { data, error } = await sb.functions.invoke('mercadopago', { body: params });
+      if (error) {
+        let message = error.message;
+        try { const body = await error.context.json(); if (body && body.erro) message = body.erro; } catch (ignored) { /* usa a mensagem padrão */ }
+        throw new Error(message);
+      }
+      if (!data || !data.ok) throw new Error((data && data.erro) || 'O Mercado Pago não respondeu.');
+      return data;
+    }
+
+    function renderMpToken() {
+      const status = document.getElementById('mp-token-status');
+      const input = document.getElementById('mp-token');
+      document.getElementById('mp-token-remove').hidden = !mpAccount;
+      document.getElementById('mp-token-save').textContent = mpAccount ? 'Trocar Access Token' : 'Conectar Mercado Pago';
+      input.placeholder = mpAccount ? `Conectado (termina em ${mpAccount.final})` : 'APP_USR-...';
+      status.classList.remove('error');
+      status.textContent = mpAccount
+        ? `Conectado à conta ${mpAccount.conta || 'do Mercado Pago'}. O checkout com Pix e cartão está ligado.`
+        : 'Cole o Access Token e clique em Conectar. Ele fica guardado em segurança no servidor do bingo e não aparece mais na tela.';
+    }
+
+    async function loadMpAccount() {
+      mpAccount = null;
+      try {
+        const data = await callMercadoPago({ acao: 'info' });
+        if (data.configurado) mpAccount = { conta: data.conta, final: data.final };
+      } catch (error) { /* sem checkout por enquanto */ }
+      renderMpToken();
+      renderPayStatus();
+      renderTickets();
     }
 
     function payReady() {
@@ -4951,12 +4990,7 @@ var qrcode = function() {
     }
 
     async function callCheckout(params) {
-      const url = new URL(checkoutUrl());
-      Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
-      const response = await fetch(url.toString(), { redirect: 'follow' });
-      const data = await response.json();
-      if (!data || !data.ok) throw new Error((data && data.erro) || 'O checkout não respondeu.');
-      return data;
+      return callMercadoPago(params);
     }
 
     const checkoutLinks = new Map();
@@ -5021,7 +5055,7 @@ var qrcode = function() {
         qrBox.innerHTML = '<div class="pay-wait">Não deu para falar com o checkout.</div>';
         status.textContent = window.claude
           ? 'No link de prévia o navegador bloqueia o checkout. Abra o arquivo do bingo no Chrome.'
-          : `Confira o endereço do checkout e o Access Token. (${error.message})`;
+          : `Não deu para criar o pagamento: ${error.message}`;
       }
     }
 
@@ -5060,8 +5094,7 @@ var qrcode = function() {
       status.classList.toggle('ok', payReady());
 
       document.getElementById('check-pay-btn').hidden = !checkoutUrl() || !(game.ticketPrice > 0);
-      if (game.pay.checkout && !checkoutUrl()) hint.textContent = 'O endereço do checkout precisa começar com https:// e terminar em /exec.';
-      else if (game.pay.link && !link) hint.textContent = 'O link precisa começar com https:// (copie o link inteiro do Mercado Pago).';
+      if (game.pay.link && !link) hint.textContent = 'O link precisa começar com https:// (copie o link inteiro do Mercado Pago).';
       else if (game.pay.key && problem) hint.textContent = problem;
       else if (!(game.ticketPrice > 0)) hint.textContent = 'Agora coloque o valor da cartela no quadro Vendas para liberar o botão Pagar.';
       else if (payReady()) hint.textContent = 'Pronto. Cada cartela tem um botão Pagar com o QR Code no valor certo.';
@@ -5139,11 +5172,10 @@ var qrcode = function() {
       document.getElementById('pix-name').value = game.pay.name;
       document.getElementById('pix-city').value = game.pay.city;
       document.getElementById('mp-link').value = game.pay.link;
-      document.getElementById('mp-checkout').value = game.pay.checkout;
       renderPayStatus();
     }
 
-    [['pix-type', 'type'], ['pix-key', 'key'], ['pix-name', 'name'], ['pix-city', 'city'], ['mp-link', 'link'], ['mp-checkout', 'checkout']].forEach(([id, field]) => {
+    [['pix-type', 'type'], ['pix-key', 'key'], ['pix-name', 'name'], ['pix-city', 'city'], ['mp-link', 'link']].forEach(([id, field]) => {
       const element = document.getElementById(id);
       element.addEventListener(element.tagName === 'SELECT' ? 'change' : 'input', () => {
         game.pay[field] = element.value;
@@ -5153,6 +5185,52 @@ var qrcode = function() {
       });
     });
     document.getElementById('pay-preview').addEventListener('click', () => openPay(null));
+    document.getElementById('mp-token-save').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      const input = document.getElementById('mp-token');
+      const status = document.getElementById('mp-token-status');
+      const token = input.value.trim();
+      if (!token) { status.textContent = 'Cole o Access Token no campo acima (começa com APP_USR-).'; status.classList.add('error'); return; }
+      button.disabled = true;
+      status.classList.remove('error');
+      status.textContent = 'Conferindo com o Mercado Pago...';
+      try {
+        const data = await callMercadoPago({ acao: 'salvar', token });
+        mpAccount = { conta: data.conta, final: data.final };
+        input.value = '';
+        checkoutLinks.clear();
+        renderMpToken();
+        renderPayStatus();
+        renderTickets();
+        showToast('Mercado Pago conectado.');
+      } catch (error) {
+        status.textContent = error.message;
+        status.classList.add('error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+    document.getElementById('mp-token-remove').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (button.dataset.armed !== '1') {
+        button.dataset.armed = '1';
+        button.textContent = 'Clique de novo para desconectar';
+        setTimeout(() => { button.dataset.armed = ''; button.textContent = 'Desconectar Mercado Pago'; }, 4000);
+        return;
+      }
+      button.dataset.armed = '';
+      try {
+        await callMercadoPago({ acao: 'remover' });
+        mpAccount = null;
+        checkoutLinks.clear();
+        renderMpToken();
+        renderPayStatus();
+        renderTickets();
+        showToast('Mercado Pago desconectado.');
+      } catch (error) {
+        showToast(error.message, 4200);
+      }
+    });
     document.getElementById('check-pay-btn').addEventListener('click', async event => {
       const button = event.currentTarget;
       const pending = tickets.filter(ticket => !ticket.paid);
@@ -5337,6 +5415,7 @@ var qrcode = function() {
         cloudReady = true;
         await pushCloud();
         await loadMySite();
+        await loadMpAccount();
         showToast(`Bem-vindo! Suas configurações ficam salvas na sua conta.`, 3600);
       } catch (error) {
         cloudReady = true;
@@ -5351,6 +5430,8 @@ var qrcode = function() {
       clearTimeout(cloudTimer);
       storageKey = STORAGE_KEY;
       mySite = null;
+      mpAccount = null;
+      renderMpToken();
       showAuthStep('login');
       authMessage('Você saiu. Entre de novo para usar o bingo.');
     }
