@@ -764,6 +764,15 @@
           <button type="button" class="link-btn" id="sb-change">Trocar servidor</button>
         </div>
       </form>
+
+      <form class="auth-form" id="reset-form" hidden>
+        <h2>Criar senha nova</h2>
+        <p class="auth-sub">Escolha a senha nova da sua conta. Depois é só entrar com ela.</p>
+        <label class="field-label">Senha nova<input id="reset-pass" type="password" autocomplete="new-password" minlength="6" required></label>
+        <label class="field-label">Repita a senha<input id="reset-pass2" type="password" autocomplete="new-password" minlength="6" required></label>
+        <button class="add-prize" id="reset-submit" type="submit">Salvar senha nova</button>
+        <div class="auth-msg" id="reset-msg" role="status"></div>
+      </form>
     </div>
   </div>
   <div class="pay-modal" id="pay-modal" hidden>
@@ -5228,6 +5237,7 @@ var qrcode = function() {
       document.getElementById('auth').hidden = step === 'app';
       document.getElementById('sb-setup').hidden = step !== 'setup';
       document.getElementById('auth-form').hidden = step !== 'login';
+      document.getElementById('reset-form').hidden = step !== 'reset';
       document.getElementById('user-chip').hidden = step !== 'app';
       document.body.classList.toggle('locked', step !== 'app');
       if (step === 'setup') {
@@ -5249,9 +5259,18 @@ var qrcode = function() {
       if (/email not confirmed/i.test(message)) return 'Confirme o seu e-mail primeiro: abra o link que chegou na sua caixa de entrada.';
       if (/already registered|already been registered/i.test(message)) return 'Esse e-mail já tem conta. Use a aba Entrar.';
       if (/password should be at least/i.test(message)) return 'A senha precisa ter pelo menos 6 caracteres.';
+      if (/different from the old|same password/i.test(message)) return 'Escolha uma senha diferente da antiga.';
+      if (/session.*missing|expired|invalid.*token/i.test(message)) return 'O link venceu. Peça outro em Esqueci a senha.';
       if (/rate limit/i.test(message)) return 'Muitas tentativas. Espere um pouco e tente de novo.';
       if (/failed to fetch|network/i.test(message)) return 'Sem conexão com o servidor. Confira a internet e o endereço do Supabase.';
       return message || 'Algo deu errado. Tente de novo.';
+    }
+
+    // Quem chega pelo link "Esqueci a senha" do e-mail precisa criar a senha nova antes de entrar.
+    let recoveringPassword = /type=recovery/.test(location.hash);
+
+    function authRedirectUrl() {
+      return location.protocol.startsWith('http') ? location.origin + location.pathname : undefined;
     }
 
     function connectSupabase() {
@@ -5273,6 +5292,8 @@ var qrcode = function() {
       }
       sb.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_OUT') { signedOut(); return; }
+        if (event === 'PASSWORD_RECOVERY') recoveringPassword = true;
+        if (recoveringPassword) { showAuthStep('reset'); return; }
         if (session && session.user && (!currentUser || currentUser.id !== session.user.id)) {
           setTimeout(() => signedIn(session.user), 0);
         }
@@ -5385,7 +5406,7 @@ var qrcode = function() {
           const site = cleanSlug(document.getElementById('auth-site').value);
           if (site && slugProblem(site)) { authMessage(slugProblem(site), true); return; }
           if (site && !(await slugFree(site))) { authMessage('Esse endereço de site já está em uso. Escolha outro.', true); return; }
-          const { data, error } = await sb.auth.signUp({ email, password, options: { data: { nome_loja: store, site } } });
+          const { data, error } = await sb.auth.signUp({ email, password, options: { data: { nome_loja: store, site }, emailRedirectTo: authRedirectUrl() } });
           if (error) throw error;
           if (!data.session) {
             authMessage('Conta criada! Abra o e-mail que enviamos para confirmar e depois entre aqui.');
@@ -5408,11 +5429,35 @@ var qrcode = function() {
       const email = document.getElementById('auth-email').value.trim();
       if (!email) { authMessage('Escreva o seu e-mail acima e clique de novo.', true); return; }
       try {
-        const { error } = await sb.auth.resetPasswordForEmail(email);
+        const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() });
         if (error) throw error;
         authMessage('Enviamos um e-mail para criar uma senha nova.');
       } catch (error) {
         authMessage(translateAuthError(error), true);
+      }
+    });
+
+    document.getElementById('reset-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const password = document.getElementById('reset-pass').value;
+      const message = document.getElementById('reset-msg');
+      const button = document.getElementById('reset-submit');
+      message.classList.add('error');
+      if (password.length < 6) { message.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+      if (password !== document.getElementById('reset-pass2').value) { message.textContent = 'As duas senhas não são iguais.'; return; }
+      button.disabled = true;
+      try {
+        const { error } = await sb.auth.updateUser({ password });
+        if (error) throw error;
+        recoveringPassword = false;
+        history.replaceState(null, '', location.pathname + location.search);
+        showToast('Senha nova salva.');
+        const { data } = await sb.auth.getSession();
+        if (data && data.session && data.session.user) signedIn(data.session.user);
+      } catch (error) {
+        message.textContent = translateAuthError(error);
+      } finally {
+        button.disabled = false;
       }
     });
 
@@ -5441,6 +5486,7 @@ var qrcode = function() {
       if (!sb) return;
       try {
         const { data } = await sb.auth.getSession();
+        if (recoveringPassword) { showAuthStep('reset'); return; }
         if (data && data.session && data.session.user) signedIn(data.session.user);
       } catch (error) { /* fica na tela de entrar */ }
     }
