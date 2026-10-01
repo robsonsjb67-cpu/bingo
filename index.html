@@ -410,6 +410,19 @@
     .pub-ticket span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pub-ticket.sold { color: var(--ink); }
     .pub-ticket.sold .ticket-number { color: #fff; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--ball) 60%, #fff), var(--ball) 60%, color-mix(in srgb, var(--ball) 60%, #000)); }
+    button.pub-ticket { width: 100%; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; text-align: left; }
+    button.pub-ticket.buy { border: 2px solid #15803d; background: #f0fdf4; }
+    button.pub-ticket.buy:hover { background: #dcfce7; }
+    .pub-ticket span.buy-tag { overflow: visible; flex-shrink: 0; }
+    .pub-ticket .buy-tag { margin-left: auto; padding: 4px 9px; border-radius: 999px; background: #15803d; color: #fff; font-size: 11px; }
+    .pub-ticket.held { color: #b45309; }
+    .buy-form { width: 100%; display: grid; gap: 10px; text-align: left; }
+    .buy-form .add-prize { padding: 13px; font-size: 14px; }
+    .buy-form .add-prize:disabled { opacity: .6; cursor: wait; }
+    .buy-msg { min-height: 16px; color: #c0262d; font-size: 12px; line-height: 1.5; text-align: center; }
+    .pub-notice { padding: 14px 16px; border-radius: 14px; background: #fff; border: 2px solid #15803d; color: var(--ink); font-weight: 700; text-align: center; }
+    .pub-notice.wait { border-color: #f5b40b; }
+    .pub-notice[hidden] { display: none; }
     .pub-ticket.win { border-color: #f5b40b; background: #fff9e8; box-shadow: 0 0 0 3px #f5b40b40; }
     .pub-foot { margin: 0; color: var(--muted); font: 11px 'DM Mono', monospace; text-align: center; }
     .pub-missing { max-width: 520px; margin: 12vh auto 0; padding: 0 16px; text-align: center; }
@@ -702,6 +715,7 @@
       <span class="pub-live" id="pub-live"><span class="tv-dot"></span><span id="pub-state">ao vivo</span></span>
     </header>
     <main class="pub-main">
+      <div class="pub-notice" id="pub-notice" role="status" hidden></div>
       <section class="pub-stage">
         <div class="pub-globe" id="pub-globe"></div>
         <div class="pub-result">
@@ -794,6 +808,20 @@
       </div>
       <a class="pay-link" id="pay-link" href="#" target="_blank" rel="noopener" hidden>Pagar com cartão no Mercado Pago</a>
       <button class="add-prize" id="pay-mark" type="button">Já recebi: marcar como pago</button>
+    </div>
+  </div>
+  <div class="pay-modal" id="buy-modal" hidden>
+    <div class="pay-card" role="dialog" aria-modal="true" aria-labelledby="buy-title">
+      <button class="pay-close" id="buy-close" type="button" aria-label="Fechar">×</button>
+      <div class="pay-eyebrow" id="buy-title">Cartela</div>
+      <div class="pay-amount" id="buy-amount">R$ 0,00</div>
+      <form class="buy-form" id="buy-form">
+        <label class="field-label">Seu nome<input id="buy-name" maxlength="60" autocomplete="name" required placeholder="Nome e sobrenome"></label>
+        <label class="field-label">Seu WhatsApp<input id="buy-phone" type="tel" inputmode="tel" autocomplete="tel" required placeholder="(11) 99999-9999"></label>
+        <button class="add-prize" id="buy-submit" type="submit">Pagar com Pix ou cartão</button>
+        <div class="buy-msg" id="buy-msg" role="status"></div>
+        <div class="pay-instr">Você vai para a página segura do Mercado Pago. A cartela fica reservada por 15 minutos e vira sua assim que o pagamento for aprovado.</div>
+      </form>
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -4979,6 +5007,48 @@ var qrcode = function() {
       renderMpToken();
       renderPayStatus();
       renderTickets();
+      publishSoon(true);
+      startCompraSync();
+    }
+
+    /* ---------- compras feitas pelo site (participante escolhe e paga) ---------- */
+
+    let compraTimer = null;
+    const appliedCompras = new Set();
+
+    function startCompraSync() {
+      clearInterval(compraTimer);
+      compraTimer = null;
+      if (!sb || !currentUser) return;
+      syncCompras();
+      compraTimer = setInterval(syncCompras, 6000);
+    }
+
+    async function syncCompras() {
+      if (!sb || !currentUser || !cloudReady) return;
+      try {
+        const { data, error } = await sb.from('compras').select('ref, numero, nome, telefone, status')
+          .eq('user_id', currentUser.id).eq('rodada', game.round).eq('status', 'pago');
+        if (error) throw error;
+        let changed = false;
+        (data || []).forEach(compra => {
+          if (appliedCompras.has(compra.ref)) return;
+          const ticket = ticketFor(compra.numero);
+          if (!ticket) return;
+          if (!ticket.name.trim()) {
+            ticket.name = compra.nome;
+            ticket.paid = true;
+            changed = true;
+            showToast(`Cartela ${compra.numero} comprada pelo site: ${compra.nome}.`, 5200);
+          } else if (ticket.name.trim().toLowerCase() === String(compra.nome).trim().toLowerCase()) {
+            if (!ticket.paid) { ticket.paid = true; changed = true; }
+          } else {
+            showToast(`Atenção: ${compra.nome} pagou a cartela ${compra.numero} pelo site, mas ela já está com ${ticket.name}.`, 8000);
+          }
+          appliedCompras.add(compra.ref);
+        });
+        if (changed) { saveGame(); renderTickets(); renderStatus(); }
+      } catch (error) { /* tenta de novo no próximo ciclo */ }
     }
 
     function payReady() {
@@ -5203,6 +5273,7 @@ var qrcode = function() {
         renderPayStatus();
         renderTickets();
         showToast('Mercado Pago conectado.');
+        publishSoon(true);
       } catch (error) {
         status.textContent = error.message;
         status.classList.add('error');
@@ -5227,6 +5298,7 @@ var qrcode = function() {
         renderPayStatus();
         renderTickets();
         showToast('Mercado Pago desconectado.');
+        publishSoon(true);
       } catch (error) {
         showToast(error.message, 4200);
       }
@@ -5431,6 +5503,8 @@ var qrcode = function() {
       storageKey = STORAGE_KEY;
       mySite = null;
       mpAccount = null;
+      clearInterval(compraTimer);
+      appliedCompras.clear();
       renderMpToken();
       showAuthStep('login');
       authMessage('Você saiu. Entre de novo para usar o bingo.');
@@ -5707,6 +5781,7 @@ var qrcode = function() {
         sorteados: drawn.slice(),
         resultados: results.map(result => ({ n: result.number, lugar: result.slot + 1, ganhador: firstName(result.winner) })),
         vagas: resultSlotCount,
+        checkout: Boolean(mpAccount),
         atualizado: new Date().toISOString()
       };
     }
@@ -5747,8 +5822,13 @@ var qrcode = function() {
 
     let lastPublicKey = '';
 
-    function renderPublic(site) {
+    let publicSlugNow = '';
+    let publicData = {};
+
+    function renderPublic(site, taken) {
       const data = site.publico || {};
+      publicData = data;
+      const held = new Set(Array.isArray(taken) ? taken : []);
       const name = site.nome || data.nome || 'Bingo';
       document.title = `${name} · Bingo ao vivo`;
       document.getElementById('pub-name').textContent = name;
@@ -5759,7 +5839,7 @@ var qrcode = function() {
       const titles = { vendendo: 'Garanta a sua cartela!', pronto: 'Todas vendidas. O sorteio vai começar!', girando: 'Girando o bingo...', resultado: 'Temos vencedores!' };
       document.getElementById('pub-title').textContent = titles[data.estado] || data.titulo || 'Aguarde o sorteio';
       document.getElementById('pub-price').textContent = data.valor > 0
-        ? `Cartela: ${Number(data.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : '';
+        ? `Cartela: ${Number(data.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}${data.checkout && data.estado === 'vendendo' ? ' · escolha a sua abaixo' : ''}` : '';
 
       globePhase = data.estado === 'girando' ? 'spin' : 'idle';
 
@@ -5795,11 +5875,18 @@ var qrcode = function() {
 
       const cards = Array.isArray(data.cartelas) ? data.cartelas : [];
       const winners = results.map(item => item.n);
-      document.getElementById('pub-tickets').innerHTML = cards.map(card => `
-        <div class="pub-ticket${card.vendida ? ' sold' : ''}${winners.includes(card.n) ? ' win' : ''}">
-          <span class="ticket-number" style="--ball:${BALL_COLORS[card.n - 1]}">${card.n}</span>
-          <span>${card.vendida ? escapeHtml(card.nome || 'Vendida') : 'Disponível'}</span>
-        </div>`).join('');
+      const canBuy = Boolean(data.checkout) && data.valor > 0 && (data.estado === 'vendendo' || !data.estado);
+      document.getElementById('pub-tickets').innerHTML = cards.map(card => {
+        const ball = `<span class="ticket-number" style="--ball:${BALL_COLORS[card.n - 1]}">${card.n}</span>`;
+        if (card.vendida) {
+          return `<div class="pub-ticket sold${winners.includes(card.n) ? ' win' : ''}">${ball}<span>${escapeHtml(card.nome || 'Vendida')}</span></div>`;
+        }
+        if (held.has(card.n)) return `<div class="pub-ticket sold held">${ball}<span>Reservada</span></div>`;
+        if (canBuy) {
+          return `<button type="button" class="pub-ticket buy" data-buy="${card.n}">${ball}<span class="buy-tag">Comprar</span></button>`;
+        }
+        return `<div class="pub-ticket">${ball}<span>Disponível</span></div>`;
+      }).join('');
 
       const updated = data.atualizado ? new Date(data.atualizado) : null;
       document.getElementById('pub-foot').textContent = updated
@@ -5818,9 +5905,13 @@ var qrcode = function() {
         return;
       }
       sb = window.supabase.createClient(settings.url, settings.key, { auth: { persistSession: false } });
+      publicSlugNow = slug;
       const load = async () => {
         try {
-          const { data, error } = await sb.from('sites').select('slug, nome, publico').eq('slug', slug).maybeSingle();
+          const [{ data, error }, held] = await Promise.all([
+            sb.from('sites').select('slug, nome, publico').eq('slug', slug).maybeSingle(),
+            sb.rpc('bingo_ocupadas', { p_slug: slug }).then(result => result.data || [], () => [])
+          ]);
           if (error) throw error;
           if (!data) {
             document.querySelector('.pub-main').hidden = true;
@@ -5828,14 +5919,107 @@ var qrcode = function() {
             document.getElementById('pub-name').textContent = `${slug}.${PLATFORM_DOMAIN}`;
             return;
           }
-          renderPublic(data);
+          renderPublic(data, held);
         } catch (error) {
           document.getElementById('pub-foot').textContent = 'Reconectando...';
         }
       };
       await load();
       setInterval(load, 3000);
+      checkReturningBuyer();
     }
+
+    function publicNotice(text, waiting) {
+      const notice = document.getElementById('pub-notice');
+      notice.textContent = text;
+      notice.classList.toggle('wait', Boolean(waiting));
+      notice.hidden = !text;
+    }
+
+    // Quem volta do Mercado Pago chega com ?compra=REF: conferimos o pagamento e avisamos.
+    async function checkReturningBuyer() {
+      let ref = '';
+      try { ref = new URLSearchParams(location.search).get('compra') || ''; } catch (error) { ref = ''; }
+      if (!ref) return;
+      let tries = 0;
+      const check = async () => {
+        tries++;
+        try {
+          const { data, error } = await sb.functions.invoke('mercadopago', { body: { acao: 'conferir', ref } });
+          if (error || !data || !data.ok) throw error || new Error('sem resposta');
+          if (data.status === 'pago') { publicNotice(`Pagamento aprovado! A cartela ${data.numero} é sua. Boa sorte!`); burstConfetti(2500); return; }
+          if (data.status === 'recusado') { publicNotice('O pagamento não foi aprovado. Você pode escolher a cartela e tentar de novo.', true); return; }
+          publicNotice(`Aguardando a confirmação do pagamento da cartela ${data.numero}...`, true);
+        } catch (error) {
+          publicNotice('Conferindo o seu pagamento...', true);
+        }
+        if (tries < 40) setTimeout(check, 5000);
+      };
+      check();
+    }
+
+    let buyingNumber = null;
+
+    function openBuy(number) {
+      buyingNumber = number;
+      document.getElementById('buy-title').textContent = `Cartela ${number}`;
+      document.getElementById('buy-amount').textContent = Number(publicData.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      document.getElementById('buy-msg').textContent = '';
+      document.getElementById('buy-submit').disabled = false;
+      document.getElementById('buy-modal').hidden = false;
+      try {
+        const saved = JSON.parse(localStorage.getItem('bingo-comprador') || '{}');
+        if (saved.nome) document.getElementById('buy-name').value = saved.nome;
+        if (saved.telefone) document.getElementById('buy-phone').value = saved.telefone;
+      } catch (error) { /* primeira compra */ }
+      document.getElementById('buy-name').focus();
+    }
+
+    function closeBuy() {
+      document.getElementById('buy-modal').hidden = true;
+      buyingNumber = null;
+    }
+
+    document.getElementById('pub-tickets').addEventListener('click', event => {
+      const button = event.target.closest('[data-buy]');
+      if (button) openBuy(Number(button.dataset.buy));
+    });
+    document.getElementById('buy-close').addEventListener('click', closeBuy);
+    ['buy-name', 'buy-phone'].forEach(id => document.getElementById(id).addEventListener('input', () => { document.getElementById('buy-msg').textContent = ''; }));
+    document.getElementById('buy-modal').addEventListener('click', event => { if (event.target.id === 'buy-modal') closeBuy(); });
+    document.getElementById('buy-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!buyingNumber || !sb) return;
+      const nome = document.getElementById('buy-name').value.trim();
+      const telefone = document.getElementById('buy-phone').value.trim();
+      const message = document.getElementById('buy-msg');
+      const button = document.getElementById('buy-submit');
+      if (nome.length < 2) { message.textContent = 'Escreva o seu nome.'; return; }
+      if (telefone.replace(/\D/g, '').length < 10) { message.textContent = 'Escreva o seu WhatsApp com DDD.'; return; }
+      try { localStorage.setItem('bingo-comprador', JSON.stringify({ nome, telefone })); } catch (error) { /* segue sem lembrar */ }
+      button.disabled = true;
+      message.textContent = '';
+      button.textContent = 'Abrindo o Mercado Pago...';
+      try {
+        const back = new URL(location.href);
+        back.searchParams.delete('compra');
+        if (!back.searchParams.get('site') && !location.hostname.endsWith('.' + PLATFORM_DOMAIN)) back.searchParams.set('site', publicSlugNow);
+        const { data, error } = await sb.functions.invoke('mercadopago', {
+          body: { acao: 'comprar', site: publicSlugNow, numero: buyingNumber, nome, telefone, voltar: back.toString() }
+        });
+        if (error) {
+          let text = error.message;
+          try { const body = await error.context.json(); if (body && body.erro) text = body.erro; } catch (ignored) { /* mensagem padrão */ }
+          throw new Error(text);
+        }
+        if (!data || !data.ok || !data.link) throw new Error((data && data.erro) || 'Não deu para abrir o pagamento.');
+        location.href = data.link;
+      } catch (error) {
+        message.textContent = /fetch|network/i.test(error.message) ? 'Sem conexão. Confira a internet e tente de novo.' : error.message;
+        button.disabled = false;
+        button.textContent = 'Pagar com Pix ou cartão';
+      }
+    });
 
     /* ---------- iniciar ---------- */
 
