@@ -1,9 +1,9 @@
-// Bingo · Mercado Pago (Supabase Edge Function "mercadopago")
+// Sorteio · Mercado Pago (Supabase Edge Function "mercadopago")
 // O Access Token de cada cliente fica na tabela public.mp_contas, que o navegador não consegue ler.
 // Só esta função lê o token, com a chave de serviço, para criar o checkout e conferir pagamentos.
 //
-// Ações do dono do bingo (precisa estar logado): salvar, info, remover, criar, status.
-// Ações do participante no site público (sem login): comprar, conferir.
+// Ações do dono (precisa estar logado): salvar, info, remover, criar (checkout), pixloja (copia e cola), status.
+// Ações do participante no site público (sem login): comprar (checkout), pix (copia e cola), conferir.
 // O Mercado Pago avisa os pagamentos em ?acao=webhook&u=<dono>.
 import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2';
 
@@ -52,7 +52,8 @@ async function applyPayment(admin: SupabaseClient, compra: Record<string, unknow
   return true;
 }
 
-async function comprar(admin: SupabaseClient, p: Record<string, unknown>) {
+// Reserva a cartela por 15 minutos. Devolve os dados da compra ou uma resposta de erro.
+async function reservar(admin: SupabaseClient, p: Record<string, unknown>) {
   const slug = cleanSlug(p.site);
   const numero = Number(p.numero);
   const nome = String(p.nome || '').replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -90,19 +91,39 @@ async function comprar(admin: SupabaseClient, p: Record<string, unknown>) {
     ref, user_id: site.user_id, rodada, numero, nome, telefone, valor, expira_em: expira.toISOString()
   });
   if (insertError) throw insertError;
+  return { site, token, ref, expira, valor, rodada, numero, nome, telefone };
+}
+
+function titulo(r: { site: { nome?: string }; numero: number; rodada: number }) {
+  return `${String(r.site.nome || 'Sorteio').slice(0, 60)} · Cartela ${r.numero} · Rodada ${String(r.rodada).padStart(2, '0')}`;
+}
+
+function avisoUrl(userId: string) {
+  return `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago?acao=webhook&u=${userId}`;
+}
+
+// Data no formato que o Mercado Pago pede, no horário de Brasília.
+function dataMp(date: Date) {
+  return new Date(date.getTime() - 3 * 3600000).toISOString().replace('Z', '-03:00');
+}
+
+async function comprar(admin: SupabaseClient, p: Record<string, unknown>) {
+  const r = await reservar(admin, p);
+  if (r instanceof Response) return r;
+  const { site, token, ref, expira, valor, numero, nome } = r;
 
   const corpo: Record<string, unknown> = {
     items: [{
       id: ref,
-      title: `${String(site.nome || 'Bingo').slice(0, 60)} · Cartela ${numero} · Rodada ${String(rodada).padStart(2, '0')}`,
+      title: titulo(r),
       quantity: 1,
       unit_price: valor,
       currency_id: 'BRL'
     }],
     payer: { name: nome },
     external_reference: ref,
-    statement_descriptor: 'BINGO',
-    notification_url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/mercadopago?acao=webhook&u=${site.user_id}`,
+    statement_descriptor: 'SORTEIO',
+    notification_url: avisoUrl(site.user_id),
     expires: true,
     expiration_date_to: expira.toISOString(),
     // Só Pix e cartão: sem boleto e sem lotérica.
@@ -119,7 +140,46 @@ async function comprar(admin: SupabaseClient, p: Record<string, unknown>) {
     await admin.from('compras').delete().eq('ref', ref);
     return json({ ok: false, erro: pref.data.message || 'O Mercado Pago recusou o pedido.' });
   }
-  return json({ ok: true, ref, link: pref.data.init_point, expira: expira.toISOString() });
+  return json({ ok: true, ref, link: pref.data.init_point, expira: expira.toISOString(), numero });
+}
+
+// Pix direto no site: gera o QR Code e o copia e cola, sem sair da página.
+async function pix(admin: SupabaseClient, p: Record<string, unknown>) {
+  const r = await reservar(admin, p);
+  if (r instanceof Response) return r;
+  const { site, token, ref, expira, valor, numero, nome } = r;
+  const email = String(p.email || '').trim().toLowerCase();
+  const partes = nome.split(' ');
+  const corpo = {
+    transaction_amount: valor,
+    description: titulo(r),
+    payment_method_id: 'pix',
+    external_reference: ref,
+    notification_url: avisoUrl(site.user_id),
+    date_of_expiration: dataMp(expira),
+    payer: {
+      // O Mercado Pago exige um e-mail no Pix. Sem e-mail informado, usamos um endereço reservado (example.com),
+      // que não pertence a ninguém, para não mandar o comprovante para um estranho.
+      email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : `comprador-${ref.toLowerCase()}@example.com`,
+      first_name: partes[0],
+      last_name: partes.slice(1).join(' ') || partes[0]
+    }
+  };
+  const pagamento = await mp(token, '/v1/payments', {
+    method: 'POST', body: JSON.stringify(corpo), headers: { 'X-Idempotency-Key': ref }
+  });
+  const dados = pagamento.data && pagamento.data.point_of_interaction && pagamento.data.point_of_interaction.transaction_data;
+  if (!pagamento.ok || !dados || !dados.qr_code) {
+    await admin.from('compras').delete().eq('ref', ref);
+    return json({ ok: false, erro: (pagamento.data && pagamento.data.message) || 'O Mercado Pago não gerou o Pix. Tente pelo cartão.' });
+  }
+  await admin.from('compras').update({ pagamento_id: String(pagamento.data.id || '') }).eq('ref', ref);
+  return json({
+    ok: true, ref, numero, valor,
+    copia_cola: dados.qr_code,
+    qr_base64: dados.qr_code_base64 || '',
+    expira: expira.toISOString()
+  });
 }
 
 async function conferir(admin: SupabaseClient, p: Record<string, unknown>) {
@@ -171,6 +231,7 @@ Deno.serve(async (req) => {
     const p = await req.json().catch(() => ({}));
     const acao = String(p.acao || '');
     if (acao === 'comprar') return await comprar(admin, p);
+    if (acao === 'pix') return await pix(admin, p);
     if (acao === 'conferir') return await conferir(admin, p);
 
     const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
@@ -225,13 +286,43 @@ Deno.serve(async (req) => {
           currency_id: 'BRL'
         }],
         external_reference: ref,
-        statement_descriptor: 'BINGO',
+        statement_descriptor: 'SORTEIO',
         payment_methods: { excluded_payment_types: [{ id: 'ticket' }, { id: 'atm' }] }
       };
       if (p.nome) corpo.payer = { name: String(p.nome).slice(0, 60) };
       const pref = await mp(token, '/checkout/preferences', { method: 'POST', body: JSON.stringify(corpo) });
       if (!pref.ok) return json({ ok: false, erro: pref.data.message || 'O Mercado Pago recusou o pedido.' });
       return json({ ok: true, ref, link: pref.data.init_point });
+    }
+
+    // Pix copia e cola gerado pelo painel da loja (botão Pagar de cada cartela).
+    if (acao === 'pixloja') {
+      const valor = Math.round(Number(p.valor) * 100) / 100;
+      if (!(valor > 0)) return json({ ok: false, erro: 'Valor da cartela inválido.' });
+      const ref = cleanRef(p.ref);
+      if (!ref) return json({ ok: false, erro: 'Referência da cartela vazia.' });
+      const nome = String(p.nome || 'Cliente').replace(/\s+/g, ' ').trim().slice(0, 60) || 'Cliente';
+      const partes = nome.split(' ');
+      const corpo = {
+        transaction_amount: valor,
+        description: String(p.titulo || 'Cartela do sorteio').slice(0, 120),
+        payment_method_id: 'pix',
+        external_reference: ref,
+        date_of_expiration: dataMp(new Date(Date.now() + 30 * 60000)),
+        payer: {
+          email: `comprador-${ref.toLowerCase()}@example.com`,
+          first_name: partes[0],
+          last_name: partes.slice(1).join(' ') || partes[0]
+        }
+      };
+      const pagamento = await mp(token, '/v1/payments', {
+        method: 'POST', body: JSON.stringify(corpo), headers: { 'X-Idempotency-Key': `${ref}-${Math.floor(Date.now() / 1800000)}` }
+      });
+      const dados = pagamento.data && pagamento.data.point_of_interaction && pagamento.data.point_of_interaction.transaction_data;
+      if (!pagamento.ok || !dados || !dados.qr_code) {
+        return json({ ok: false, erro: (pagamento.data && pagamento.data.message) || 'O Mercado Pago não gerou o Pix.' });
+      }
+      return json({ ok: true, ref, copia_cola: dados.qr_code, qr_base64: dados.qr_code_base64 || '' });
     }
 
     if (acao === 'status') {

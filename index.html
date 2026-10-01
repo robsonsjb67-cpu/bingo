@@ -442,6 +442,10 @@
     .buy-form { width: 100%; display: grid; gap: 10px; text-align: left; }
     .buy-form .add-prize { padding: 13px; font-size: 14px; }
     .buy-form .add-prize:disabled { opacity: .6; cursor: wait; }
+    .buy-card { width: 100%; padding: 11px; font-size: 13px; }
+    .buy-pix { width: 100%; display: grid; gap: 10px; justify-items: center; }
+    .buy-pix[hidden], .buy-form[hidden] { display: none; }
+    .buy-pix .pay-copy { width: 100%; }
     .buy-msg { min-height: 16px; color: #c0262d; font-size: 12px; line-height: 1.5; text-align: center; }
     .pub-notice { padding: 14px 16px; border-radius: 14px; background: #fff; border: 2px solid #15803d; color: var(--ink); font-weight: 700; text-align: center; }
     .pub-notice.wait { border-color: #f5b40b; }
@@ -849,8 +853,8 @@
       <div class="pay-amount" id="pay-amount">R$ 0,00</div>
       <div class="pay-qr" id="pay-qr"></div>
       <div class="pay-checkout" id="pay-checkout" hidden>
-        <div class="pay-instr">O cliente lê o QR Code com a câmera do celular, ou você clica no botão abaixo.</div>
-        <a class="pay-link" id="pay-checkout-link" href="#" target="_blank" rel="noopener">Pagar no Mercado Pago (Pix ou cartão)</a>
+        <div class="pay-instr" id="pay-checkout-instr">O cliente lê o QR Code no app do banco, ou você copia o <b>Pix copia e cola</b> e manda pra ele.</div>
+        <a class="pay-link" id="pay-checkout-link" href="#" target="_blank" rel="noopener">Pagar com cartão no Mercado Pago</a>
         <div class="pay-check-status" id="pay-check-status" aria-live="polite"></div>
       </div>
       <div class="pay-instr" id="pay-pix-instr">Abra o app do banco ou do Mercado Pago, escolha <b>Pix</b> e <b>Ler QR Code</b>.</div>
@@ -870,10 +874,20 @@
       <form class="buy-form" id="buy-form">
         <label class="field-label">Seu nome<input id="buy-name" maxlength="60" autocomplete="name" required placeholder="Nome e sobrenome"></label>
         <label class="field-label">Seu WhatsApp<input id="buy-phone" type="tel" inputmode="tel" autocomplete="tel" required placeholder="(11) 99999-9999"></label>
-        <button class="add-prize" id="buy-submit" type="submit">Pagar com Pix ou cartão</button>
+        <button class="add-prize" id="buy-submit" type="submit">Pagar com Pix</button>
+        <button class="small-btn buy-card" id="buy-card" type="button">Pagar com cartão</button>
         <div class="buy-msg" id="buy-msg" role="status"></div>
-        <div class="pay-instr">Você vai para a página segura do Mercado Pago. A cartela fica reservada por 15 minutos e vira sua assim que o pagamento for aprovado.</div>
+        <div class="pay-instr">A cartela fica reservada por 15 minutos e vira sua assim que o pagamento for aprovado. O cartão abre a página segura do Mercado Pago.</div>
       </form>
+      <div class="buy-pix" id="buy-pix" hidden>
+        <div class="pay-qr" id="buy-qr"></div>
+        <div class="pay-instr">Abra o app do banco, escolha <b>Pix</b> e leia o QR Code, ou use o <b>Pix copia e cola</b>:</div>
+        <div class="pay-copy">
+          <input id="buy-code" readonly aria-label="Código Pix copia e cola">
+          <button class="small-btn on" id="buy-copy" type="button">Copiar código Pix</button>
+        </div>
+        <div class="pay-check-status" id="buy-status" aria-live="polite">Aguardando o pagamento...</div>
+      </div>
     </div>
   </div>
   <div class="pay-modal" id="list-modal" hidden>
@@ -5392,30 +5406,39 @@ var qrcode = function() {
       return false;
     }
 
+    const pixCodes = new Map();
+
     async function startCheckout(ticket) {
       const qrBox = document.getElementById('pay-qr');
       const status = document.getElementById('pay-check-status');
       const link = document.getElementById('pay-checkout-link');
+      const copyRow = document.querySelector('.pay-copy');
       const number = ticket ? ticket.number : 0;
       const ref = checkoutRef(number);
+      const titulo = `Sorteio Catarina Farma · Cartela ${number || 'teste'} · Rodada ${String(game.round).padStart(2, '0')}`;
+      const nome = ticket ? ticket.name.trim() : '';
       link.hidden = true;
-      qrBox.innerHTML = '<div class="pay-wait">Gerando o pagamento...</div>';
+      copyRow.hidden = true;
+      qrBox.innerHTML = '<div class="pay-wait">Gerando o Pix...</div>';
       status.textContent = '';
+      // Link do cartão vem em paralelo; o Pix copia e cola é o principal.
+      if (!checkoutLinks.get(ref)) {
+        callCheckout({ acao: 'criar', ref, valor: game.ticketPrice.toFixed(2), titulo, nome })
+          .then(data => { checkoutLinks.set(ref, data.link); if (!document.getElementById('pay-modal').hidden) { link.href = data.link; link.hidden = false; } })
+          .catch(() => { /* sem cartão, fica só o Pix */ });
+      }
       try {
-        let url = checkoutLinks.get(ref);
-        if (!url) {
-          const data = await callCheckout({
-            acao: 'criar', ref, valor: game.ticketPrice.toFixed(2),
-            titulo: `Sorteio Catarina Farma · Cartela ${number || 'teste'} · Rodada ${String(game.round).padStart(2, '0')}`,
-            nome: ticket ? ticket.name.trim() : ''
-          });
-          url = data.link;
-          checkoutLinks.set(ref, url);
+        let code = pixCodes.get(ref);
+        if (!code) {
+          const data = await callCheckout({ acao: 'pixloja', ref, valor: game.ticketPrice.toFixed(2), titulo, nome });
+          code = data.copia_cola;
+          pixCodes.set(ref, code);
         }
         if (document.getElementById('pay-modal').hidden) return;
-        qrBox.innerHTML = qrSvg(url);
-        link.href = url;
-        link.hidden = false;
+        qrBox.innerHTML = qrSvg(code);
+        document.getElementById('pay-code').value = code;
+        copyRow.hidden = false;
+        if (checkoutLinks.get(ref)) { link.href = checkoutLinks.get(ref); link.hidden = false; }
         if (!ticket) { status.textContent = 'Exemplo: abra o link para ver a página do Mercado Pago.'; return; }
         status.textContent = 'Aguardando o pagamento...';
         stopCheckoutPoll();
@@ -5433,7 +5456,7 @@ var qrcode = function() {
           } catch (error) { /* tenta de novo no próximo ciclo */ }
         }, 5000);
       } catch (error) {
-        qrBox.innerHTML = '<div class="pay-wait">Não deu para falar com o checkout.</div>';
+        qrBox.innerHTML = '<div class="pay-wait">Não deu para gerar o Pix.</div>';
         status.textContent = window.claude
           ? 'No link de prévia o navegador bloqueia o checkout. Abra o sistema no Chrome.'
           : `Não deu para criar o pagamento: ${error.message}`;
@@ -6357,6 +6380,9 @@ var qrcode = function() {
       document.getElementById('buy-amount').textContent = Number(publicData.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       document.getElementById('buy-msg').textContent = '';
       document.getElementById('buy-submit').disabled = false;
+      document.getElementById('buy-card').disabled = false;
+      document.getElementById('buy-form').hidden = false;
+      document.getElementById('buy-pix').hidden = true;
       document.getElementById('buy-modal').hidden = false;
       try {
         const saved = JSON.parse(localStorage.getItem('bingo-comprador') || '{}');
@@ -6366,9 +6392,67 @@ var qrcode = function() {
       document.getElementById('buy-name').focus();
     }
 
+    let buyPoll = null;
+
     function closeBuy() {
       document.getElementById('buy-modal').hidden = true;
       buyingNumber = null;
+      clearInterval(buyPoll);
+      buyPoll = null;
+    }
+
+    function readBuyForm() {
+      const nome = document.getElementById('buy-name').value.trim();
+      const telefone = document.getElementById('buy-phone').value.trim();
+      const message = document.getElementById('buy-msg');
+      if (nome.length < 2) { message.textContent = 'Escreva o seu nome.'; return null; }
+      if (telefone.replace(/\D/g, '').length < 10) { message.textContent = 'Escreva o seu WhatsApp com DDD.'; return null; }
+      try { localStorage.setItem('bingo-comprador', JSON.stringify({ nome, telefone })); } catch (error) { /* segue sem lembrar */ }
+      message.textContent = '';
+      return { nome, telefone };
+    }
+
+    async function callBuy(body) {
+      const { data, error } = await sb.functions.invoke('mercadopago', { body });
+      if (error) {
+        let text = error.message;
+        try { const answer = await error.context.json(); if (answer && answer.erro) text = answer.erro; } catch (ignored) { /* mensagem padrão */ }
+        throw new Error(text);
+      }
+      if (!data || !data.ok) throw new Error((data && data.erro) || 'Não deu para abrir o pagamento.');
+      return data;
+    }
+
+    function buyError(error) {
+      document.getElementById('buy-msg').textContent = /fetch|network/i.test(error.message) ? 'Sem conexão. Confira a internet e tente de novo.' : error.message;
+    }
+
+    function showBuyPix(data) {
+      document.getElementById('buy-form').hidden = true;
+      document.getElementById('buy-pix').hidden = false;
+      document.getElementById('buy-qr').innerHTML = data.qr_base64
+        ? `<img src="data:image/png;base64,${data.qr_base64}" alt="QR Code do Pix">`
+        : qrSvg(data.copia_cola);
+      document.getElementById('buy-code').value = data.copia_cola;
+      const status = document.getElementById('buy-status');
+      status.classList.remove('ok');
+      status.textContent = 'Aguardando o pagamento...';
+      clearInterval(buyPoll);
+      let tries = 0;
+      buyPoll = setInterval(async () => {
+        tries++;
+        if (tries > 220) { clearInterval(buyPoll); status.textContent = 'O Pix venceu. Feche e escolha a cartela de novo.'; return; }
+        try {
+          const answer = await callBuy({ acao: 'conferir', ref: data.ref });
+          if (answer.status === 'pago') {
+            clearInterval(buyPoll);
+            status.textContent = `Pagamento aprovado! A cartela ${data.numero} é sua. Boa sorte!`;
+            status.classList.add('ok');
+            publicNotice(`Pagamento aprovado! A cartela ${data.numero} é sua. Boa sorte!`);
+            burstConfetti(2500);
+          }
+        } catch (error) { /* tenta de novo */ }
+      }, 4000);
     }
 
     document.getElementById('pub-tickets').addEventListener('click', event => {
@@ -6381,35 +6465,46 @@ var qrcode = function() {
     document.getElementById('buy-form').addEventListener('submit', async event => {
       event.preventDefault();
       if (!buyingNumber || !sb) return;
-      const nome = document.getElementById('buy-name').value.trim();
-      const telefone = document.getElementById('buy-phone').value.trim();
-      const message = document.getElementById('buy-msg');
+      const form = readBuyForm();
+      if (!form) return;
       const button = document.getElementById('buy-submit');
-      if (nome.length < 2) { message.textContent = 'Escreva o seu nome.'; return; }
-      if (telefone.replace(/\D/g, '').length < 10) { message.textContent = 'Escreva o seu WhatsApp com DDD.'; return; }
-      try { localStorage.setItem('bingo-comprador', JSON.stringify({ nome, telefone })); } catch (error) { /* segue sem lembrar */ }
       button.disabled = true;
-      message.textContent = '';
+      button.textContent = 'Gerando o Pix...';
+      try {
+        const data = await callBuy({ acao: 'pix', site: publicSlugNow, numero: buyingNumber, ...form });
+        showBuyPix(data);
+      } catch (error) {
+        buyError(error);
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Pagar com Pix';
+      }
+    });
+    document.getElementById('buy-card').addEventListener('click', async event => {
+      if (!buyingNumber || !sb) return;
+      const form = readBuyForm();
+      if (!form) return;
+      const button = event.currentTarget;
+      button.disabled = true;
       button.textContent = 'Abrindo o Mercado Pago...';
       try {
         const back = new URL(location.href);
         back.searchParams.delete('compra');
         if (!back.searchParams.get('site') && !location.hostname.endsWith('.' + PLATFORM_DOMAIN)) back.searchParams.set('site', publicSlugNow);
-        const { data, error } = await sb.functions.invoke('mercadopago', {
-          body: { acao: 'comprar', site: publicSlugNow, numero: buyingNumber, nome, telefone, voltar: back.toString() }
-        });
-        if (error) {
-          let text = error.message;
-          try { const body = await error.context.json(); if (body && body.erro) text = body.erro; } catch (ignored) { /* mensagem padrão */ }
-          throw new Error(text);
-        }
-        if (!data || !data.ok || !data.link) throw new Error((data && data.erro) || 'Não deu para abrir o pagamento.');
+        const data = await callBuy({ acao: 'comprar', site: publicSlugNow, numero: buyingNumber, ...form, voltar: back.toString() });
+        if (!data.link) throw new Error('Não deu para abrir o pagamento.');
         location.href = data.link;
       } catch (error) {
-        message.textContent = /fetch|network/i.test(error.message) ? 'Sem conexão. Confira a internet e tente de novo.' : error.message;
+        buyError(error);
         button.disabled = false;
-        button.textContent = 'Pagar com Pix ou cartão';
+        button.textContent = 'Pagar com cartão';
       }
+    });
+    document.getElementById('buy-copy').addEventListener('click', () => {
+      const input = document.getElementById('buy-code');
+      const done = () => showToast('Código Pix copiado. Cole no app do banco.');
+      const fallback = () => { input.select(); document.execCommand('copy'); done(); };
+      try { navigator.clipboard.writeText(input.value).then(done, fallback); } catch (error) { fallback(); }
     });
 
     /* ---------- iniciar ---------- */
