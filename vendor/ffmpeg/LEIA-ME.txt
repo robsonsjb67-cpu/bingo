@@ -1,0 +1,6 @@
+ffmpeg.wasm usado para converter o vídeo do sorteio para MP4 (H.264 + AAC), o formato que o WhatsApp aceita.
+
+- ffmpeg/  = @ffmpeg/ffmpeg 0.12.15 (MIT) — https://github.com/ffmpegwasm/ffmpeg.wasm
+- core/    = @ffmpeg/core 0.12.10 (GPL-2.0-or-later, inclui FFmpeg e x264) — código-fonte em https://github.com/ffmpegwasm/ffmpeg.wasm e https://ffmpeg.org
+
+Arquivos copiados sem alteração dos pacotes do npm.

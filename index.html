@@ -106,6 +106,8 @@
     .ticket-phone:focus { border-color: var(--green); box-shadow: 0 0 0 2px #0b7a751a; }
     .wa-btn { display: block; padding: 8px 10px; border-radius: 8px; background: #25d366; color: #063b1c; font-size: 12px; font-weight: 800; text-align: center; text-decoration: none; }
     .wa-btn:hover { background: #1fbe5b; }
+    .wa-share { border-color: #25d366; background: #25d366; color: #063b1c; }
+    .rec-tip { margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 1.45; }
     .wa-list-btn { border-color: #25d366; color: #0b6b33; }
     .list-card { width: min(460px, 100%); justify-items: stretch; text-align: left; }
     .list-card .pay-eyebrow { text-align: center; }
@@ -4407,11 +4409,56 @@ var qrcode = function() {
           <div class="rec-player"></div>
           <div class="rec-foot">
             <button class="small-btn" data-act="play" type="button">Assistir</button>
+            <button class="small-btn wa-share" data-act="share" type="button">Enviar no WhatsApp</button>
             <button class="small-btn" data-act="save" type="button">Baixar</button>
             <button class="small-btn" data-act="delete" type="button">Apagar</button>
             <span class="rec-size">${formatSize(record.size)}</span>
           </div>
+          ${whatsappReady(record) ? '' : '<div class="rec-tip">Use <b>Enviar no WhatsApp</b>: o sistema converte o vídeo para o formato que o WhatsApp aceita (a primeira vez demora um pouco).</div>'}
         </article>`).join('');
+    }
+
+    // Só H.264 dentro de MP4 o WhatsApp aceita como vídeo.
+    function whatsappReady(record) {
+      return Boolean(record && /mp4/.test(record.type) && /avc1|h264/i.test(record.type));
+    }
+
+    let ffmpegPromise = null;
+    const whatsappCopies = new Map();
+
+    // ffmpeg.wasm fica no próprio site (pasta vendor/ffmpeg) e só é baixado quando precisa.
+    function loadFFmpeg() {
+      if (!ffmpegPromise) {
+        ffmpegPromise = (async () => {
+          const base = new URL('vendor/ffmpeg/', location.href).href;
+          const { FFmpeg } = await import(base + 'ffmpeg/index.js');
+          const ffmpeg = new FFmpeg();
+          await ffmpeg.load({ coreURL: base + 'core/ffmpeg-core.js', wasmURL: base + 'core/ffmpeg-core.wasm' });
+          return ffmpeg;
+        })().catch(error => { ffmpegPromise = null; throw error; });
+      }
+      return ffmpegPromise;
+    }
+
+    async function whatsappCopy(id, blob, onProgress) {
+      if (whatsappCopies.has(id)) return whatsappCopies.get(id);
+      const ffmpeg = await loadFFmpeg();
+      const input = /mp4/.test(blob.type) ? 'entrada.mp4' : 'entrada.webm';
+      await ffmpeg.writeFile(input, new Uint8Array(await blob.arrayBuffer()));
+      const progress = ({ progress }) => onProgress && onProgress(Math.max(0, Math.min(99, Math.round(progress * 100))));
+      ffmpeg.on('progress', progress);
+      try {
+        await ffmpeg.exec(['-i', input, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-maxrate', '1400k', '-bufsize', '2800k',
+          '-pix_fmt', 'yuv420p', '-vf', 'scale=1280:-2', '-r', '25', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', 'saida.mp4']);
+      } finally {
+        ffmpeg.off('progress', progress);
+      }
+      const data = await ffmpeg.readFile('saida.mp4');
+      try { await ffmpeg.deleteFile(input); await ffmpeg.deleteFile('saida.mp4'); } catch (error) { /* ignora */ }
+      const result = new Blob([data], { type: 'video/mp4' });
+      if (!result.size) throw new Error('vídeo vazio');
+      whatsappCopies.set(id, result);
+      return result;
     }
 
     async function refreshRecordings() {
@@ -4505,7 +4552,8 @@ var qrcode = function() {
 
     function pickVideoType() {
       if (typeof MediaRecorder === 'undefined') return '';
-      const options = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+      // MP4 com áudio AAC é o formato que o WhatsApp aceita como vídeo. WebM só como documento.
+      const options = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
       return options.find(type => { try { return MediaRecorder.isTypeSupported(type); } catch (error) { return false; } }) || '';
     }
 
@@ -4811,7 +4859,9 @@ var qrcode = function() {
       const type = pickVideoType();
       recordedChunks = [];
       try {
-        mediaRecorder = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
+        // Taxa menor para o vídeo ficar leve (cerca de 1 minuto ≈ 10 MB).
+        const quality = { videoBitsPerSecond: 1200000, audioBitsPerSecond: 96000 };
+        mediaRecorder = new MediaRecorder(stream, type ? { mimeType: type, ...quality } : quality);
       } catch (error) {
         stream.getTracks().forEach(track => track.stop());
         stopStudioStream();
@@ -5052,6 +5102,39 @@ var qrcode = function() {
       const action = button.dataset.act;
 
       if (action === 'play') { togglePlayer(card, id); return; }
+
+      if (action === 'share') {
+        if (button.disabled) return;
+        const label = button.textContent;
+        try {
+          const original = await readRecordingBlob(id);
+          if (!original) { showToast('Vídeo não encontrado.'); return; }
+          const record = recordings.find(item => item.id === id);
+          let blob = original;
+          // O navegador grava em VP9/Opus; o WhatsApp só aceita H.264/AAC. Convertemos aqui mesmo.
+          if (!whatsappReady(record)) {
+            button.disabled = true;
+            button.textContent = 'Preparando...';
+            blob = await whatsappCopy(id, original, percent => { button.textContent = `Preparando ${percent}%`; });
+          }
+          const name = `sorteio-rodada-${String(card.dataset.round).padStart(2, '0')}.mp4`;
+          const file = new File([blob], name, { type: 'video/mp4' });
+          const text = `🎥 Vídeo do sorteio · Rodada ${String(card.dataset.round).padStart(2, '0')}${record && record.winners ? `\n🏆 ${record.winners}` : ''}`;
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], text, title: 'Vídeo do sorteio' });
+            return;
+          }
+          downloadBlob(blob, name);
+          showToast('Vídeo pronto para o WhatsApp e baixado. No WhatsApp, toque no clipe › Galeria e escolha o vídeo da pasta Downloads.', 9000);
+        } catch (error) {
+          if (error && error.name === 'AbortError') return;
+          showToast('Não deu para preparar o vídeo aqui. Use Baixar e mande pelo clipe › Documento no WhatsApp.', 7000);
+        } finally {
+          button.disabled = false;
+          button.textContent = label;
+        }
+        return;
+      }
 
       if (action === 'save') {
         try {
