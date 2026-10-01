@@ -106,6 +106,14 @@
     .ticket-phone:focus { border-color: var(--green); box-shadow: 0 0 0 2px #0b7a751a; }
     .wa-btn { display: block; padding: 8px 10px; border-radius: 8px; background: #25d366; color: #063b1c; font-size: 12px; font-weight: 800; text-align: center; text-decoration: none; }
     .wa-btn:hover { background: #1fbe5b; }
+    .wa-list-btn { border-color: #25d366; color: #0b6b33; }
+    .list-card { width: min(460px, 100%); justify-items: stretch; text-align: left; }
+    .list-card .pay-eyebrow { text-align: center; }
+    .list-card textarea { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font: 13px/1.5 'DM Mono', monospace; resize: vertical; color: var(--ink); }
+    .list-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .list-actions .add-prize, .list-actions .wa-btn { padding: 12px; font-size: 14px; display: grid; place-items: center; }
+    .list-opt { color: var(--muted); justify-self: center; }
+    .list-opt .switch-track { background: #d3dde4; }
     .slot-wa { margin-top: 8px; }
     .wa-missing { color: var(--muted); font-size: 11px; line-height: 1.4; }
     .wa-panel textarea { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 13px; line-height: 1.45; resize: vertical; }
@@ -605,6 +613,7 @@
               <span class="switch-track" style="background:#d3dde4"><span class="switch-thumb"></span></span>
               <span>Nova rodada automática</span>
             </label>
+            <button class="small-btn wa-list-btn" id="group-list-btn" type="button">Lista para o grupo</button>
             <button class="small-btn" id="new-round-btn" type="button">Nova rodada</button>
           </div>
         </div>
@@ -865,6 +874,19 @@
         <div class="buy-msg" id="buy-msg" role="status"></div>
         <div class="pay-instr">Você vai para a página segura do Mercado Pago. A cartela fica reservada por 15 minutos e vira sua assim que o pagamento for aprovado.</div>
       </form>
+    </div>
+  </div>
+  <div class="pay-modal" id="list-modal" hidden>
+    <div class="pay-card list-card" role="dialog" aria-modal="true" aria-labelledby="list-title">
+      <button class="pay-close" id="list-close" type="button" aria-label="Fechar">×</button>
+      <div class="pay-eyebrow" id="list-title">Lista para o grupo do WhatsApp</div>
+      <label class="switch list-opt"><input type="checkbox" id="list-free-only"><span class="switch-track"><span class="switch-thumb"></span></span><span>Mostrar só as livres</span></label>
+      <textarea id="list-text" rows="14" aria-label="Lista pronta"></textarea>
+      <div class="list-actions">
+        <button class="add-prize" id="list-copy" type="button">Copiar lista</button>
+        <a class="wa-btn" id="list-send" href="#" target="_blank" rel="noopener">Enviar no WhatsApp</a>
+      </div>
+      <div class="pay-instr">Em <b>Enviar no WhatsApp</b>, escolha o seu grupo e toque em enviar. Você pode mudar o texto aqui antes.</div>
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -5973,8 +5995,70 @@ var qrcode = function() {
     }
 
     function siteUrl(slug) {
+      // Enquanto o domínio próprio não estiver no ar, o site do cliente abre por ?site=nome.
+      const host = location.hostname.toLowerCase();
+      if (host === PLATFORM_DOMAIN || host.endsWith('.' + PLATFORM_DOMAIN)) return `https://${slug}.${PLATFORM_DOMAIN}`;
+      if (location.protocol.startsWith('http')) return `${location.origin}${location.pathname}?site=${slug}`;
       return `https://${slug}.${PLATFORM_DOMAIN}`;
     }
+
+    /* ---------- lista das cartelas para o grupo do WhatsApp ---------- */
+
+    function groupListText(freeOnly) {
+      const store = (currentUser && currentUser.user_metadata && currentUser.user_metadata.nome_loja) || (mySite && mySite.nome) || 'Catarina Farma';
+      const lines = [`🎉 *SORTEIO ${store.toUpperCase()}* 🎉`, `Rodada ${String(game.round).padStart(2, '0')}`];
+      if (game.prizes.length) {
+        lines.push('');
+        game.prizes.forEach((prize, index) => lines.push(`🏆 ${game.prizes.length > 1 ? `${index + 1}º prêmio: ` : 'Prêmio: '}${prize.name}${prize.value > 0 ? ` (${formatMoney(prize.value)})` : ''}`));
+      }
+      if (game.ticketPrice > 0) lines.push(`💰 Cartela: ${priceText()}`);
+      lines.push('');
+      const free = tickets.filter(ticket => !ticket.name.trim()).length;
+      tickets.forEach(ticket => {
+        const name = ticket.name.trim();
+        if (freeOnly && name) return;
+        const number = String(ticket.number).padStart(TICKET_TOTAL >= 100 ? 3 : 2, '0');
+        lines.push(name ? `${number} - ${firstName(name)} ${ticket.paid ? '✅' : '⏳'}` : `${number} - livre`);
+      });
+      lines.push('');
+      lines.push(free ? `📌 Faltam *${free}* de ${TICKET_TOTAL} cartelas.` : '📌 Todas vendidas! O sorteio vai começar.');
+      if (free) {
+        const digits = TICKET_TOTAL >= 100 ? 3 : 2;
+        lines.push(`🔢 Livres: ${tickets.filter(ticket => !ticket.name.trim()).map(ticket => String(ticket.number).padStart(digits, '0')).join(', ')}`);
+      }
+      if (mySite && mySite.slug && mpAccount && game.ticketPrice > 0 && free) lines.push(`👉 Escolha e pague a sua aqui: ${siteUrl(mySite.slug)}`);
+      else if (mySite && mySite.slug) lines.push(`📺 Acompanhe ao vivo: ${siteUrl(mySite.slug)}`);
+      else if (free) lines.push('Chame no privado para garantir a sua!');
+      if (tickets.some(ticket => ticket.name.trim())) lines.push('✅ pago   ⏳ aguardando pagamento');
+      return lines.join('\n');
+    }
+
+    function refreshGroupList() {
+      const text = groupListText(document.getElementById('list-free-only').checked);
+      document.getElementById('list-text').value = text;
+      document.getElementById('list-send').href = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    }
+
+    document.getElementById('group-list-btn').addEventListener('click', () => {
+      refreshGroupList();
+      document.getElementById('list-modal').hidden = false;
+    });
+    document.getElementById('list-free-only').addEventListener('change', refreshGroupList);
+    document.getElementById('list-text').addEventListener('input', event => {
+      document.getElementById('list-send').href = `https://wa.me/?text=${encodeURIComponent(event.target.value)}`;
+    });
+    document.getElementById('list-close').addEventListener('click', () => { document.getElementById('list-modal').hidden = true; });
+    document.getElementById('list-modal').addEventListener('click', event => { if (event.target.id === 'list-modal') event.currentTarget.hidden = true; });
+    document.getElementById('list-copy').addEventListener('click', async () => {
+      const area = document.getElementById('list-text');
+      try {
+        await navigator.clipboard.writeText(area.value);
+      } catch (error) {
+        area.select();
+        document.execCommand('copy');
+      }
+      showToast('Lista copiada. Agora é só colar no grupo.');
+    });
 
     async function slugFree(slug, ownerId) {
       if (!sb) return true;
@@ -6020,7 +6104,7 @@ var qrcode = function() {
         state.textContent = `${mySite.slug}.${PLATFORM_DOMAIN}`;
         state.classList.add('ok');
         link.href = siteUrl(mySite.slug);
-        link.textContent = `Abrir ${mySite.slug}.${PLATFORM_DOMAIN}`;
+        link.textContent = "Abrir meu site";
         link.hidden = false;
         document.getElementById('site-slug').value = mySite.slug;
       } else {
