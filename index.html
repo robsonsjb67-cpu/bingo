@@ -575,7 +575,7 @@
 
         <div class="section-head">
           <h2>Números sorteados</h2>
-          <span class="section-note">SEM REPETIÇÃO · DE 1 A 10</span>
+          <span class="section-note" id="range-note">SEM REPETIÇÃO · DE 1 A 10</span>
         </div>
         <div class="history" id="history" aria-live="polite"><span class="history-empty">Os números aparecem aqui conforme o sorteio.</span></div>
 
@@ -695,7 +695,10 @@
         <section class="panel status-panel">
           <div class="status-top"><h2>Vendas</h2><span class="status-total" id="remaining-count">10 faltando</span></div>
           <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
-          <div class="progress-caption"><span id="called-count">0 vendidas</span><span>10 cartelas</span></div>
+          <div class="progress-caption"><span id="called-count">0 vendidas</span><span id="ticket-total-caption">10 cartelas</span></div>
+          <label class="field-label price-field">Quantas cartelas vender
+            <select id="ticket-count"><option value="10">10 cartelas</option><option value="15">15 cartelas</option><option value="20">20 cartelas</option><option value="25">25 cartelas</option><option value="30">30 cartelas</option><option value="40">40 cartelas</option><option value="50">50 cartelas</option><option value="60">60 cartelas</option><option value="75">75 cartelas</option><option value="100">100 cartelas</option></select>
+          </label>
           <label class="field-label price-field">Valor de cada cartela (R$)<input id="ticket-price-input" inputmode="decimal" placeholder="0,00"></label>
           <div class="money-rows">
             <div class="money-row"><span>Arrecadado</span><b id="money-raised">R$ 0,00</b></div>
@@ -3129,18 +3132,28 @@ var qrcode = function() {
   </script>
   <script>
     const STORAGE_KEY = 'bingo-da-casa-v3';
-    const TICKET_TOTAL = 10;
+    const TICKET_OPTIONS = [10, 15, 20, 25, 30, 40, 50, 60, 75, 100];
+    let TICKET_TOTAL = 10;
     const SPIN_OPTIONS = [5, 10, 15, 20, 30];
     const EJECT_MS = 750;
     const BALL_COLORS = ['#e5484d', '#f97316', '#f5b40b', '#22a447', '#0ea5a0', '#2b7fe0', '#4f46e5', '#9b3fd6', '#d9387e', '#0b7a75'];
-    const allNumbers = Array.from({ length: TICKET_TOTAL }, (_, index) => index + 1);
+    let allNumbers = Array.from({ length: TICKET_TOTAL }, (_, index) => index + 1);
+
+    function setTicketTotal(count) {
+      TICKET_TOTAL = TICKET_OPTIONS.includes(count) ? count : 10;
+      allNumbers = Array.from({ length: TICKET_TOTAL }, (_, index) => index + 1);
+    }
+
+    function ballColor(number) {
+      return BALL_COLORS[(number - 1) % BALL_COLORS.length];
+    }
 
     const globe = document.getElementById('globe');
     const globeContext = globe.getContext('2d');
     const globeSize = globe.width;
     const globeCenter = globeSize / 2;
     const globeRadius = globeSize / 2 - 8;
-    const ballRadius = globeRadius * 0.128;
+    let ballRadius = globeRadius * 0.128;
     const GLOBE_SCALE = 0.78;
     const GLOBE_DRAW_Y = 300;
     const stageElement = document.querySelector('.stage');
@@ -3150,6 +3163,7 @@ var qrcode = function() {
     const resultSlots = document.getElementById('result-slots');
     const ticketsGrid = document.getElementById('tickets');
 
+    let storageKey = STORAGE_KEY;
     let game = loadGame();
     let tickets = game.tickets;
     let drawn = [];
@@ -3201,15 +3215,16 @@ var qrcode = function() {
       return allNumbers.map(number => ({ number, name: '', paid: false }));
     }
 
-    let storageKey = STORAGE_KEY;
-
     function loadGame(raw) {
-      const fallback = { prizes: [], tickets: defaultTickets(), round: 1, autoSpin: true, autoRound: false, autoRecord: true, spinSeconds: 10, ticketPrice: 0, pay: defaultPay(), soundOn: true, voiceOn: true, voiceURI: '' };
+      let saved = null;
+      try { saved = raw !== undefined ? raw : JSON.parse(localStorage.getItem(storageKey)); } catch (error) { saved = null; }
+      setTicketTotal(saved && typeof saved === 'object' ? saved.ticketCount : 10);
+      const fallback = { ticketCount: TICKET_TOTAL, prizes: [], tickets: defaultTickets(), round: 1, autoSpin: true, autoRound: false, autoRecord: true, spinSeconds: 10, ticketPrice: 0, pay: defaultPay(), soundOn: true, voiceOn: true, voiceURI: '' };
       try {
-        const saved = raw !== undefined ? raw : JSON.parse(localStorage.getItem(storageKey));
         if (!saved || typeof saved !== 'object') return fallback;
         const savedTickets = Array.isArray(saved.tickets) ? saved.tickets : [];
         return {
+          ticketCount: TICKET_TOTAL,
           prizes: Array.isArray(saved.prizes) ? saved.prizes.map(prize => ({ ...prize, value: toMoney(prize.value) })) : [],
           tickets: fallback.tickets.map(base => {
             const found = savedTickets.find(ticket => ticket && ticket.number === base.number);
@@ -3234,6 +3249,7 @@ var qrcode = function() {
     function gameData() {
       return {
           prizes: game.prizes,
+          ticketCount: TICKET_TOTAL,
           tickets: tickets.map(ticket => ({ number: ticket.number, name: ticket.name, paid: Boolean(ticket.paid) })),
           pay: game.pay,
           round: game.round,
@@ -3439,12 +3455,14 @@ var qrcode = function() {
     /* ---------- globo de bolas ---------- */
 
     function buildBalls() {
+      // Com mais cartelas, as bolas ficam menores para caber todas no globo.
+      ballRadius = globeRadius * 0.128 * Math.min(1, Math.sqrt(10 / TICKET_TOTAL) * 1.15);
       globeBalls = Array.from({ length: TICKET_TOTAL }, (_, index) => {
         const angle = (Math.PI * 2 * index) / TICKET_TOTAL;
         const distance = globeRadius * 0.46;
         return {
           number: index + 1,
-          color: BALL_COLORS[index],
+          color: ballColor(index + 1),
           r: ballRadius,
           x: globeCenter + Math.cos(angle) * distance,
           y: globeCenter + Math.sin(angle) * distance,
@@ -3975,7 +3993,7 @@ var qrcode = function() {
         return `
         <div class="${classes.join(' ')}">
           <div class="ticket-top">
-            <span class="ticket-number" style="--ball:${BALL_COLORS[ticket.number - 1]}">${ticket.number}</span>
+            <span class="ticket-number" style="--ball:${ballColor(ticket.number)}">${ticket.number}</span>
             ${!result && game.ticketPrice > 0 ? `<span class="ticket-price">${priceText()}</span>` : ''}
             ${result ? `<span class="ticket-place">${ordinal(result.slot + 1)} lugar${prize ? ' · ' + escapeHtml(prize.name) : ''}</span>` : ''}
           </div>
@@ -4002,7 +4020,7 @@ var qrcode = function() {
         if (result && slot === justFilledSlot) classes.push('pop');
         return `<div class="result-slot">
           <div class="slot-prize">${ordinal(slot + 1)} lugar${prize ? ' · ' + escapeHtml(prize.name) : ''}</div>
-          <div class="ball-wrap${result ? ' filled' : ''}"><div class="${classes.join(' ')}${result ? '' : ' empty'}" style="--ball:${result ? BALL_COLORS[result.number - 1] : '#2a4a5e'}"><span class="face">${result ? result.number : '?'}</span></div></div>
+          <div class="ball-wrap${result ? ' filled' : ''}"><div class="${classes.join(' ')}${result ? '' : ' empty'}" style="--ball:${result ? ballColor(result.number) : '#2a4a5e'}"><span class="face">${result ? result.number : '?'}</span></div></div>
           <div class="slot-winner">${result ? escapeHtml(result.winner) : ''}</div>
         </div>`;
       }).join('');
@@ -4011,7 +4029,7 @@ var qrcode = function() {
     function renderHistory() {
       const history = document.getElementById('history');
       history.innerHTML = drawn.length
-        ? drawn.map((number, index) => `<span class="history-ball${index === drawn.length - 1 ? ' latest' : ''}" style="--ball:${BALL_COLORS[number - 1]}"><i>${number}</i></span>`).join('')
+        ? drawn.map((number, index) => `<span class="history-ball${index === drawn.length - 1 ? ' latest' : ''}" style="--ball:${ballColor(number)}"><i>${number}</i></span>`).join('')
         : '<span class="history-empty">Os números aparecem aqui conforme o sorteio.</span>';
     }
 
@@ -4084,7 +4102,13 @@ var qrcode = function() {
       document.getElementById('money-total').textContent = (TICKET_TOTAL * game.ticketPrice).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
       document.getElementById('called-count').textContent = `${sold} vendidas`;
       document.getElementById('remaining-count').textContent = `${TICKET_TOTAL - sold} faltando`;
-      document.getElementById('progress-fill').style.width = `${sold * 10}%`;
+      document.getElementById('progress-fill').style.width = `${(sold / TICKET_TOTAL) * 100}%`;
+      document.getElementById('ticket-total-caption').textContent = `${TICKET_TOTAL} cartelas`;
+      document.getElementById('range-note').textContent = `SEM REPETIÇÃO · DE 1 A ${TICKET_TOTAL}`;
+      globe.setAttribute('aria-label', `Globo girando com as bolas de 1 a ${TICKET_TOTAL}`);
+      const countSelect = document.getElementById('ticket-count');
+      if (countSelect.value !== String(TICKET_TOTAL)) countSelect.value = String(TICKET_TOTAL);
+      countSelect.disabled = spinning || spun;
       document.getElementById('stage-title').textContent = stageTitle;
       updateDrawButton();
       updateNewRoundButton();
@@ -4455,7 +4479,7 @@ var qrcode = function() {
         ctx.fillStyle = '#cfe2ea'; ctx.font = '500 17px "DM Mono", monospace';
         ctx.fillText(fitText(ctx, `${slot + 1}º lugar${prize ? ' · ' + prize.name : ''}`, gap - 10), x, y - radius - 26);
         if (result) {
-          studioBall(ctx, x, y, radius, BALL_COLORS[result.number - 1], String(result.number));
+          studioBall(ctx, x, y, radius, ballColor(result.number), String(result.number));
           ctx.fillStyle = '#ffffff'; ctx.font = '700 28px "Space Grotesk", sans-serif';
           ctx.fillText(fitText(ctx, result.winner, gap - 10), x, y + radius + 36);
         } else {
@@ -4469,6 +4493,14 @@ var qrcode = function() {
 
       ctx.fillStyle = 'rgba(4,19,31,.85)'; ctx.fillRect(0, H - 92, W, 92);
       ctx.textAlign = 'left'; ctx.font = '500 16px "DM Mono", monospace';
+      if (TICKET_TOTAL > 10) {
+        const sold = soldTickets().length;
+        ctx.fillStyle = '#cfe2ea';
+        ctx.fillText(fitText(ctx, `${sold} de ${TICKET_TOTAL} cartelas vendidas`, W - 40), 20, H - 54);
+        const winners = results.filter(item => item.winner).map(item => `${item.number} · ${item.winner}`).join('   ');
+        if (winners) { ctx.fillStyle = '#ffc94a'; ctx.fillText(fitText(ctx, winners, W - 40), 20, H - 22); }
+        return;
+      }
       const colWidth = (W - 40) / 5;
       tickets.forEach((ticket, index) => {
         const x = 20 + (index % 5) * colWidth;
@@ -4829,6 +4861,25 @@ var qrcode = function() {
     });
     priceInput.addEventListener('blur', () => {
       if (game.ticketPrice > 0) priceInput.value = game.ticketPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    });
+    document.getElementById('ticket-count').addEventListener('change', event => {
+      const select = event.target;
+      const count = Number(select.value);
+      if (spinning || spun) { select.value = String(TICKET_TOTAL); showToast('Mude a quantidade antes de girar ou numa rodada nova.'); return; }
+      const blocked = tickets.filter(ticket => ticket.number > count && ticket.name.trim());
+      if (blocked.length) {
+        select.value = String(TICKET_TOTAL);
+        showToast(`As cartelas ${blocked.map(ticket => ticket.number).join(', ')} já têm dono. Libere elas antes de diminuir.`, 5200);
+        return;
+      }
+      setTicketTotal(count);
+      tickets = allNumbers.map(number => ticketFor(number) || { number, name: '', paid: false });
+      game.tickets = tickets;
+      game.ticketCount = TICKET_TOTAL;
+      buildBalls();
+      saveGame();
+      render();
+      showToast(`Agora são ${TICKET_TOTAL} cartelas nesta rodada.`);
     });
     document.getElementById('spin-seconds').addEventListener('change', event => {
       const value = Number(event.target.value);
@@ -5455,6 +5506,7 @@ var qrcode = function() {
     function applyGame(next) {
       game = next;
       tickets = game.tickets;
+      if (globeBalls.length !== TICKET_TOTAL) buildBalls();
       soundOn = game.soundOn;
       drawn = [];
       results = [];
@@ -5853,7 +5905,7 @@ var qrcode = function() {
         const prize = (data.premios || [])[index];
         return `<div class="result-slot">
           <div class="slot-prize">${index + 1}º lugar${prize ? ' · ' + escapeHtml(prize.nome) : ''}</div>
-          <div class="ball-wrap${result ? ' filled' : ''}"><div class="number-ball${slots > 1 ? ' small' : ''}${result ? (fresh ? ' pop' : '') : ' empty'}" style="--ball:${result ? BALL_COLORS[result.n - 1] : '#2a4a5e'}"><span class="face">${result ? result.n : '?'}</span></div></div>
+          <div class="ball-wrap${result ? ' filled' : ''}"><div class="number-ball${slots > 1 ? ' small' : ''}${result ? (fresh ? ' pop' : '') : ' empty'}" style="--ball:${result ? ballColor(result.n) : '#2a4a5e'}"><span class="face">${result ? result.n : '?'}</span></div></div>
           <div class="slot-winner">${result ? escapeHtml(result.ganhador || '') : ''}</div>
         </div>`;
       }).join('');
@@ -5870,14 +5922,14 @@ var qrcode = function() {
 
       const drawnList = Array.isArray(data.sorteados) ? data.sorteados : [];
       document.getElementById('pub-history').innerHTML = drawnList.length
-        ? drawnList.map((number, index) => `<span class="history-ball${index === drawnList.length - 1 ? ' latest' : ''}" style="--ball:${BALL_COLORS[number - 1]}"><i>${number}</i></span>`).join('')
+        ? drawnList.map((number, index) => `<span class="history-ball${index === drawnList.length - 1 ? ' latest' : ''}" style="--ball:${ballColor(number)}"><i>${number}</i></span>`).join('')
         : '<span class="history-empty">Os números aparecem aqui na hora do sorteio.</span>';
 
       const cards = Array.isArray(data.cartelas) ? data.cartelas : [];
       const winners = results.map(item => item.n);
       const canBuy = Boolean(data.checkout) && data.valor > 0 && (data.estado === 'vendendo' || !data.estado);
       document.getElementById('pub-tickets').innerHTML = cards.map(card => {
-        const ball = `<span class="ticket-number" style="--ball:${BALL_COLORS[card.n - 1]}">${card.n}</span>`;
+        const ball = `<span class="ticket-number" style="--ball:${ballColor(card.n)}">${card.n}</span>`;
         if (card.vendida) {
           return `<div class="pub-ticket sold${winners.includes(card.n) ? ' win' : ''}">${ball}<span>${escapeHtml(card.nome || 'Vendida')}</span></div>`;
         }
