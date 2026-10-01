@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#062033">
-  <title>Bingo Catarina Farma</title>
+  <title>Sorteio Catarina Farma</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
@@ -102,6 +102,13 @@
     .ticket-place { color: var(--orange); font: 700 10px 'DM Mono', monospace; text-align: right; }
     .ticket-name { width: 100%; padding: 8px 9px; border: 1px solid var(--line); border-radius: 4px; outline: none; background: #fff; color: var(--ink); font-size: 12px; }
     .ticket-name:focus { border-color: var(--green); box-shadow: 0 0 0 2px #0b7a751a; }
+    .ticket-phone { width: 100%; padding: 6px 9px; border: 1px solid var(--line); border-radius: 4px; outline: none; background: #fff; color: var(--ink); font-size: 11px; }
+    .ticket-phone:focus { border-color: var(--green); box-shadow: 0 0 0 2px #0b7a751a; }
+    .wa-btn { display: block; padding: 8px 10px; border-radius: 8px; background: #25d366; color: #063b1c; font-size: 12px; font-weight: 800; text-align: center; text-decoration: none; }
+    .wa-btn:hover { background: #1fbe5b; }
+    .slot-wa { margin-top: 8px; }
+    .wa-missing { color: var(--muted); font-size: 11px; line-height: 1.4; }
+    .wa-panel textarea { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 13px; line-height: 1.45; resize: vertical; }
     .ticket.winner { border-color: var(--orange); background: #fff5f0; box-shadow: 0 0 0 2px #ef724e2e; }
     .ticket.winner .ticket-number { color: white; background: var(--orange); }
 
@@ -117,6 +124,14 @@
     .field-label select { width: 100%; padding: 10px 11px; border: 1px solid var(--line); border-radius: 4px; outline: none; background: #fff; color: var(--ink); }
     .field-label select:focus { border-color: var(--green); box-shadow: 0 0 0 2px #0b7a751a; }
     .voice-row { display: flex; gap: 8px; margin-top: 11px; }
+    .loc-block { display: grid; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
+    .loc-title { font-size: 12px; font-weight: 800; color: var(--ink); }
+    .loc-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .loc-row b { display: block; font-size: 13px; }
+    .loc-row small { display: block; color: var(--muted); font-size: 11px; }
+    .loc-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    .loc-rec.recording { background: #c0262d; border-color: #c0262d; color: #fff; }
+    .loc-mic { margin-top: 2px; }
     .voice-row .small-btn { flex: 1; padding: 9px 8px; text-align: center; }
     .small-btn.on { background: var(--green); border-color: var(--green); color: white; }
     .voice-hint { margin-top: 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
@@ -501,7 +516,7 @@
 <body>
   <div class="shell">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor"/></svg></span><span class="brand-text"><b>Catarina Farma</b><small>Bingo ao vivo</small></span></div>
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor"/></svg></span><span class="brand-text"><b>Catarina Farma</b><small>Sorteio ao vivo</small></span></div>
       <div class="topbar-right">
         <div class="user-chip" id="user-chip" hidden>
           <span class="user-mail" id="user-mail"></span>
@@ -516,11 +531,11 @@
     </header>
 
     <main class="layout">
-      <section class="main-column" aria-label="Jogo de bingo">
+      <section class="main-column" aria-label="Sorteio">
         <div class="stage">
           <div class="tv-bar">
             <span class="tv-live"><span class="tv-dot"></span>AO VIVO</span>
-            <span class="tv-title" id="tv-title">Bingo Catarina Farma · Rodada 01</span>
+            <span class="tv-title" id="tv-title">Sorteio Catarina Farma · Rodada 01</span>
             <span class="tv-clock" id="tv-clock"></span>
           </div>
           <div class="stage-left">
@@ -568,7 +583,7 @@
               <div class="current-prize-name" id="current-prize-name">Sem prêmio cadastrado</div>
               <div class="current-prize-value" id="current-prize-value">Cadastre imagem e valor</div>
             </div>
-            <div class="current-prize-foot" id="current-prize-foot">O primeiro bingo leva</div>
+            <div class="current-prize-foot" id="current-prize-foot">O primeiro sorteado leva</div>
           </div>
           <div class="tv-footer" id="tv-footer"></div>
         </div>
@@ -624,6 +639,23 @@
             <button class="small-btn" id="voice-test" type="button">Testar voz</button>
           </div>
           <div class="voice-hint" id="voice-hint">A voz vem do próprio navegador, não precisa baixar nada.</div>
+          <div class="loc-block">
+            <div class="loc-title">Locução gravada por você · sai no vídeo</div>
+            <div class="loc-row" data-clip="abertura">
+              <div><b>Abertura</b><small>toca quando o globo começa a girar</small></div>
+              <div class="loc-actions"><button class="small-btn loc-rec" type="button">Gravar</button><button class="small-btn loc-play" type="button" hidden>Ouvir</button><button class="link-btn loc-del" type="button" hidden>Apagar</button></div>
+            </div>
+            <div class="loc-row" data-clip="ganhador">
+              <div><b>Ganhador</b><small>toca quando sai o resultado</small></div>
+              <div class="loc-actions"><button class="small-btn loc-rec" type="button">Gravar</button><button class="small-btn loc-play" type="button" hidden>Ouvir</button><button class="link-btn loc-del" type="button" hidden>Apagar</button></div>
+            </div>
+            <label class="switch loc-mic">
+              <input type="checkbox" id="mic-in-video">
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+              <span>Gravar o meu microfone junto no vídeo</span>
+            </label>
+            <div class="voice-hint" id="loc-hint">Grave até 20 segundos em cada um, com o microfone do computador ou do celular. A voz do navegador continua falando o número e o nome do ganhador ao vivo, mas ela não entra no vídeo. A sua locução gravada e o microfone entram.</div>
+          </div>
         </section>
         <section class="panel site-panel">
           <div class="panel-title"><h2>Meu site de sorteio</h2><span class="prize-count" id="site-state">sem endereço</span></div>
@@ -637,12 +669,20 @@
             <div class="voice-hint">No site, os participantes veem o sorteio ao vivo, os prêmios, as cartelas e os números sorteados. Ele atualiza sozinho a cada poucos segundos.</div>
           </div>
         </section>
+        <section class="panel wa-panel">
+          <div class="panel-title"><h2>Aviso ao ganhador · WhatsApp</h2></div>
+          <div class="prize-form">
+            <label class="field-label">Mensagem<textarea id="wa-message" rows="5" maxlength="600"></textarea></label>
+            <div class="voice-hint">Quando sair o ganhador, aparece o botão <b>Avisar no WhatsApp</b> na cartela dele, com esta mensagem pronta. Você pode usar: {nome}, {cartela}, {premio}, {lugar}, {rodada} e {loja}. Quem compra pelo site já fica com o WhatsApp salvo.</div>
+            <button class="link-btn" id="wa-reset" type="button">Voltar para a mensagem padrão</button>
+          </div>
+        </section>
         <section class="panel pay-panel">
           <div class="panel-title"><h2>Pagamento · Mercado Pago</h2><span class="prize-count" id="pay-status">não configurado</span></div>
           <div class="prize-form">
             <label class="field-label">Access Token do Mercado Pago (recomendado)<input id="mp-token" type="password" autocomplete="off" spellcheck="false" placeholder="APP_USR-..."></label>
             <button class="add-prize" id="mp-token-save" type="button">Conectar Mercado Pago</button>
-            <div class="voice-hint" id="mp-token-status">Cole o Access Token e clique em Conectar. Ele fica guardado em segurança no servidor do bingo e não aparece mais na tela.</div>
+            <div class="voice-hint" id="mp-token-status">Cole o Access Token e clique em Conectar. Ele fica guardado em segurança no servidor do sorteio e não aparece mais na tela.</div>
             <button class="link-btn" id="mp-token-remove" type="button" hidden>Desconectar Mercado Pago</button>
             <div class="pay-or">ou, sem checkout, use a sua chave Pix:</div>
             <label class="field-label">Tipo da chave Pix
@@ -668,7 +708,7 @@
                 <li>Cole o Access Token no campo <b>Access Token do Mercado Pago</b> acima e clique em <b>Conectar Mercado Pago</b>. Deve aparecer o nome da sua conta.</li>
                 <li>Clique em <b>Ver como o cliente paga</b>. Deve abrir a página do Mercado Pago com Pix e cartão.</li>
               </ol>
-              <p class="pay-note">Com o checkout, quando o cliente paga, a cartela vira <b>Pago</b> sozinha (o bingo confere a cada 5 segundos com a janela aberta, ou pelo botão Conferir pagamentos). O token fica guardado no servidor do bingo: nem você nem quem abre o site consegue ver ele de novo.</p>
+              <p class="pay-note">Com o checkout, quando o cliente paga, a cartela vira <b>Pago</b> sozinha (o sistema confere a cada 5 segundos com a janela aberta, ou pelo botão Conferir pagamentos). O token fica guardado no servidor do bingo: nem você nem quem abre o site consegue ver ele de novo.</p>
               <p class="pay-step-title">Sem checkout: chave Pix</p>
               <ol>
                 <li>Abra o app do <b>Mercado Pago</b> e entre na conta que vai receber.</li>
@@ -680,7 +720,7 @@
               <p class="pay-step-title">Link para pagar com cartão (opcional)</p>
               <ol>
                 <li>No app ou no site do Mercado Pago, vá em <b>Cobrar</b> e escolha <b>Link de pagamento</b>.</li>
-                <li>Coloque o valor de uma cartela e um título, por exemplo "Cartela Bingo Catarina Farma".</li>
+                <li>Coloque o valor de uma cartela e um título, por exemplo "Cartela Sorteio Catarina Farma".</li>
                 <li>Copie o link criado (começa com <b>mpago.la</b> ou <b>mercadopago.com.br</b>) e cole no campo acima.</li>
               </ol>
               <p class="pay-step-title">Testar</p>
@@ -688,7 +728,7 @@
                 <li>Clique em <b>Ver como o cliente paga</b> e leia o QR Code com o app do seu banco.</li>
                 <li>O banco deve mostrar o seu nome e o valor da cartela. Não precisa concluir o pagamento.</li>
               </ol>
-              <p class="pay-note">O bingo não enxerga o seu extrato. Quando o dinheiro cair no Mercado Pago, marque a cartela como <b>Pago</b>.</p>
+              <p class="pay-note">O sistema não enxerga o seu extrato. Quando o dinheiro cair no Mercado Pago, marque a cartela como <b>Pago</b>.</p>
             </details>
           </div>
         </section>
@@ -714,7 +754,7 @@
   <div class="public" id="public" hidden>
     <header class="pub-top">
       <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor"/></svg></span>
-        <span class="brand-text"><b id="pub-name">Carregando...</b><small id="pub-round">Bingo ao vivo</small></span></div>
+        <span class="brand-text"><b id="pub-name">Carregando...</b><small id="pub-round">Sorteio ao vivo</small></span></div>
       <span class="pub-live" id="pub-live"><span class="tv-dot"></span><span id="pub-state">ao vivo</span></span>
     </header>
     <main class="pub-main">
@@ -751,12 +791,12 @@
     <div class="auth-card">
       <div class="auth-brand">
         <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" fill="currentColor"/></svg></span>
-        <span class="brand-text"><b>Catarina Farma</b><small>Bingo ao vivo</small></span>
+        <span class="brand-text"><b>Catarina Farma</b><small>Sorteio ao vivo</small></span>
       </div>
 
       <form class="auth-form" id="sb-setup" hidden>
         <h2>Conectar ao Supabase</h2>
-        <p class="auth-sub">Só precisa fazer uma vez neste computador. Os dados ficam no seu projeto do bingo no Supabase, em Project Settings › API.</p>
+        <p class="auth-sub">Só precisa fazer uma vez neste computador. Os dados ficam no seu projeto do sorteio no Supabase, em Project Settings › API.</p>
         <label class="field-label">Project URL<input id="sb-url" inputmode="url" autocomplete="off" placeholder="https://xxxx.supabase.co" required></label>
         <label class="field-label">Chave anon public<input id="sb-key" autocomplete="off" placeholder="eyJhbGciOi..." required></label>
         <button class="add-prize" type="submit">Conectar</button>
@@ -3132,6 +3172,7 @@ var qrcode = function() {
   </script>
   <script>
     const STORAGE_KEY = 'bingo-da-casa-v3';
+    const DEFAULT_WA_MESSAGE = 'Parabéns, {nome}! 🎉 A sua cartela {cartela} foi a sorteada no sorteio de hoje da {loja} (rodada {rodada}) e você ganhou: {premio}. Fale com a gente para combinar a retirada do prêmio!';
     const TICKET_OPTIONS = [10, 15, 20, 25, 30, 40, 50, 60, 75, 100];
     let TICKET_TOTAL = 10;
     const SPIN_OPTIONS = [5, 10, 15, 20, 30];
@@ -3212,14 +3253,14 @@ var qrcode = function() {
     }
 
     function defaultTickets() {
-      return allNumbers.map(number => ({ number, name: '', paid: false }));
+      return allNumbers.map(number => ({ number, name: '', phone: '', paid: false }));
     }
 
     function loadGame(raw) {
       let saved = null;
       try { saved = raw !== undefined ? raw : JSON.parse(localStorage.getItem(storageKey)); } catch (error) { saved = null; }
       setTicketTotal(saved && typeof saved === 'object' ? saved.ticketCount : 10);
-      const fallback = { ticketCount: TICKET_TOTAL, prizes: [], tickets: defaultTickets(), round: 1, autoSpin: true, autoRound: false, autoRecord: true, spinSeconds: 10, ticketPrice: 0, pay: defaultPay(), soundOn: true, voiceOn: true, voiceURI: '' };
+      const fallback = { ticketCount: TICKET_TOTAL, prizes: [], tickets: defaultTickets(), round: 1, autoSpin: true, autoRound: false, autoRecord: true, spinSeconds: 10, ticketPrice: 0, pay: defaultPay(), soundOn: true, voiceOn: true, voiceURI: '', waMessage: DEFAULT_WA_MESSAGE };
       try {
         if (!saved || typeof saved !== 'object') return fallback;
         const savedTickets = Array.isArray(saved.tickets) ? saved.tickets : [];
@@ -3228,7 +3269,12 @@ var qrcode = function() {
           prizes: Array.isArray(saved.prizes) ? saved.prizes.map(prize => ({ ...prize, value: toMoney(prize.value) })) : [],
           tickets: fallback.tickets.map(base => {
             const found = savedTickets.find(ticket => ticket && ticket.number === base.number);
-            return { number: base.number, name: found && typeof found.name === 'string' ? found.name : '', paid: Boolean(found && found.paid) };
+            return {
+              number: base.number,
+              name: found && typeof found.name === 'string' ? found.name : '',
+              phone: found && typeof found.phone === 'string' ? found.phone : '',
+              paid: Boolean(found && found.paid)
+            };
           }),
           round: Number.isInteger(saved.round) && saved.round > 0 ? saved.round : 1,
           autoSpin: saved.autoSpin !== false,
@@ -3239,7 +3285,9 @@ var qrcode = function() {
           spinSeconds: SPIN_OPTIONS.includes(saved.spinSeconds) ? saved.spinSeconds : 10,
           soundOn: saved.soundOn !== false,
           voiceOn: saved.voiceOn !== false,
-          voiceURI: typeof saved.voiceURI === 'string' ? saved.voiceURI : ''
+          micInVideo: saved.micInVideo === true,
+          voiceURI: typeof saved.voiceURI === 'string' ? saved.voiceURI : '',
+          waMessage: typeof saved.waMessage === 'string' && saved.waMessage.trim() ? saved.waMessage : DEFAULT_WA_MESSAGE
         };
       } catch (error) {
         return fallback;
@@ -3250,7 +3298,8 @@ var qrcode = function() {
       return {
           prizes: game.prizes,
           ticketCount: TICKET_TOTAL,
-          tickets: tickets.map(ticket => ({ number: ticket.number, name: ticket.name, paid: Boolean(ticket.paid) })),
+          tickets: tickets.map(ticket => ({ number: ticket.number, name: ticket.name, phone: ticket.phone || '', paid: Boolean(ticket.paid) })),
+          waMessage: game.waMessage,
           pay: game.pay,
           round: game.round,
           autoSpin: game.autoSpin,
@@ -3260,6 +3309,7 @@ var qrcode = function() {
           ticketPrice: game.ticketPrice,
           soundOn: game.soundOn,
           voiceOn: game.voiceOn,
+          micInVideo: Boolean(game.micInVideo),
           voiceURI: game.voiceURI
         };
     }
@@ -3836,8 +3886,9 @@ var qrcode = function() {
       results = [];
       justFilledSlot = -1;
       pendingQueue = shuffle(allNumbers).slice(0, resultSlotCount).map((number, slot) => ({ number, slot }));
-      setStageTitle('Girando o bingo...');
-      say(resultSlotCount > 1 ? `Atenção! Vamos sortear ${resultSlotCount} bolas.` : 'Atenção! Vamos girar o bingo.', { interrupt: true });
+      setStageTitle('Girando o globo...');
+      if (hasClip('abertura')) { shutUp(); playClip('abertura'); }
+      else say(resultSlotCount > 1 ? `Atenção! Vamos sortear ${resultSlotCount} bolas.` : 'Atenção! Vamos começar o sorteio.', { interrupt: true });
       renderResultSlots();
       startNextBall();
     }
@@ -3915,7 +3966,10 @@ var qrcode = function() {
       render();
 
       const anuncio = winnersSpeech();
-      setTimeout(() => say(anuncio, { interrupt: true }), 1000);
+      setTimeout(async () => {
+        if (hasClip('ganhador')) await playClip('ganhador');
+        say(anuncio, { interrupt: true });
+      }, 1000);
 
       const resumo = results.map(result => `${ordinal(result.slot + 1)} ${result.winner} (bola ${result.number})`).join(' · ');
       showToast(resumo, 7000);
@@ -3998,6 +4052,10 @@ var qrcode = function() {
             ${result ? `<span class="ticket-place">${ordinal(result.slot + 1)} lugar${prize ? ' · ' + escapeHtml(prize.name) : ''}</span>` : ''}
           </div>
           <input class="ticket-name" type="text" maxlength="24" placeholder="Quem comprou?" value="${escapeHtml(ticket.name)}" data-number="${ticket.number}" aria-label="Nome de quem comprou a cartela ${ticket.number}">
+          <input class="ticket-phone" type="tel" inputmode="tel" maxlength="20" placeholder="WhatsApp (opcional)" value="${escapeHtml(ticket.phone || '')}" data-number="${ticket.number}" aria-label="WhatsApp de quem comprou a cartela ${ticket.number}">
+          ${result ? (whatsappLink(ticket, result)
+            ? `<a class="wa-btn" href="${whatsappLink(ticket, result)}" target="_blank" rel="noopener">Avisar no WhatsApp</a>`
+            : '<span class="wa-missing">Coloque o WhatsApp acima para avisar</span>') : ''}
           ${game.ticketPrice > 0 ? `<div class="ticket-pay">
             ${payReady() && !ticket.paid ? `<button class="pay-btn" type="button" data-pay="${ticket.number}">Pagar</button>` : ''}
             <label class="paid-label${ticket.paid ? ' on' : ''}"><input type="checkbox" class="paid-check" data-number="${ticket.number}"${ticket.paid ? ' checked' : ''}> ${ticket.paid ? 'Pago' : 'Não pago'}</label>
@@ -4007,7 +4065,7 @@ var qrcode = function() {
 
       const sold = soldTickets().length;
       document.getElementById('cards-note').textContent = allSold()
-        ? 'Todas vendidas — o bingo já pode girar'
+        ? 'Todas vendidas — o sorteio já pode começar'
         : `Escreva o nome de quem comprou cada número · faltam ${TICKET_TOTAL - sold}`;
     }
 
@@ -4022,8 +4080,30 @@ var qrcode = function() {
           <div class="slot-prize">${ordinal(slot + 1)} lugar${prize ? ' · ' + escapeHtml(prize.name) : ''}</div>
           <div class="ball-wrap${result ? ' filled' : ''}"><div class="${classes.join(' ')}${result ? '' : ' empty'}" style="--ball:${result ? ballColor(result.number) : '#2a4a5e'}"><span class="face">${result ? result.number : '?'}</span></div></div>
           <div class="slot-winner">${result ? escapeHtml(result.winner) : ''}</div>
+          ${result && whatsappLink(ticketFor(result.number), result) ? `<a class="wa-btn slot-wa" href="${whatsappLink(ticketFor(result.number), result)}" target="_blank" rel="noopener">Avisar no WhatsApp</a>` : ''}
         </div>`;
       }).join('');
+    }
+
+    function phoneDigits(phone) {
+      let digits = String(phone || '').replace(/\D/g, '');
+      if (digits.length === 10 || digits.length === 11) digits = '55' + digits;
+      return digits.length >= 12 && digits.length <= 13 ? digits : '';
+    }
+
+    function whatsappLink(ticket, result) {
+      const digits = ticket ? phoneDigits(ticket.phone) : '';
+      if (!digits) return '';
+      const prize = game.prizes[result.slot];
+      const store = (currentUser && currentUser.user_metadata && currentUser.user_metadata.nome_loja) || (mySite && mySite.nome) || 'Catarina Farma';
+      const text = String(game.waMessage || DEFAULT_WA_MESSAGE)
+        .replace(/\{nome\}/g, String(ticket.name || '').trim().split(/\s+/)[0] || '')
+        .replace(/\{cartela\}/g, String(ticket.number))
+        .replace(/\{premio\}/g, prize ? prize.name : `o ${ordinal(result.slot + 1)} lugar`)
+        .replace(/\{lugar\}/g, ordinal(result.slot + 1))
+        .replace(/\{rodada\}/g, String(game.round).padStart(2, '0'))
+        .replace(/\{loja\}/g, store);
+      return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
     }
 
     function renderHistory() {
@@ -4069,7 +4149,7 @@ var qrcode = function() {
 
     function updateDrawButton() {
       if (spinning) { drawButton.disabled = true; drawButton.textContent = 'Girando...'; return; }
-      if (spun) { drawButton.disabled = true; drawButton.textContent = 'Bingo sorteado!'; return; }
+      if (spun) { drawButton.disabled = true; drawButton.textContent = 'Sorteio feito!'; return; }
       const missing = TICKET_TOTAL - soldTickets().length;
       if (missing > 0) {
         drawButton.disabled = true;
@@ -4078,7 +4158,7 @@ var qrcode = function() {
       }
       drawButton.disabled = false;
       const count = ballsThisSpin();
-      drawButton.textContent = count > 1 ? `Girar o bingo (${count} bolas)` : 'Girar o bingo';
+      drawButton.textContent = count > 1 ? `Girar o globo (${count} bolas)` : 'Girar o globo';
     }
 
     function updateNewRoundButton() {
@@ -4156,7 +4236,7 @@ var qrcode = function() {
     }
 
     function renderTvBar() {
-      document.getElementById('tv-title').textContent = `Bingo Catarina Farma · Rodada ${String(game.round).padStart(2, '0')}`;
+      document.getElementById('tv-title').textContent = `Sorteio Catarina Farma · Rodada ${String(game.round).padStart(2, '0')}`;
     }
 
     function renderTvFooter() {
@@ -4335,7 +4415,7 @@ var qrcode = function() {
             showToast('Vídeo baixado.');
           } catch (error) {
             if (error && error.code === 'declined') showToast('Download cancelado.');
-            else showToast('Não deu para baixar aqui. Abra o arquivo do bingo no Chrome para baixar.', 5200);
+            else showToast('Não deu para baixar aqui. Abra o sistema no Chrome para baixar.', 5200);
           }
           return;
         }
@@ -4452,7 +4532,7 @@ var qrcode = function() {
       ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
       ctx.fillStyle = '#ff6b5a'; ctx.font = '700 20px "DM Mono", monospace'; ctx.fillText('AO VIVO', 56, 33);
       ctx.fillStyle = '#ffffff'; ctx.font = '700 24px "Space Grotesk", sans-serif';
-      ctx.fillText(`✚ Bingo Catarina Farma · Rodada ${String(game.round).padStart(2, '0')}`, 170, 33);
+      ctx.fillText(`✚ Sorteio Catarina Farma · Rodada ${String(game.round).padStart(2, '0')}`, 170, 33);
       const now = new Date();
       ctx.textAlign = 'right'; ctx.fillStyle = '#93b3c4'; ctx.font = '500 18px "DM Mono", monospace';
       ctx.fillText(`${now.toLocaleDateString('pt-BR')} · ${now.toLocaleTimeString('pt-BR', { hour12: false })}`, W - 30, 33);
@@ -4523,16 +4603,162 @@ var qrcode = function() {
         if (context && context.createMediaStreamDestination) {
           recordAudioDest = context.createMediaStreamDestination();
           recordAudioDest.stream.getAudioTracks().forEach(track => stream.addTrack(track));
+          if (game.micInVideo) connectMicToRecording(context);
         }
       } catch (error) { recordAudioDest = null; }
       return stream;
+    }
+
+    let micStream = null;
+
+    // O microfone vai só para o vídeo, não para a caixa de som (evita microfonia).
+    async function connectMicToRecording(context) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+        if (!recordAudioDest) { stream.getTracks().forEach(track => track.stop()); return; }
+        micStream = stream;
+        context.createMediaStreamSource(stream).connect(recordAudioDest);
+      } catch (error) {
+        showToast('Não deu para usar o microfone. Libere o microfone para este site no navegador.', 5200);
+      }
     }
 
     function stopStudioStream() {
       clearInterval(studioTimer);
       studioTimer = null;
       recordAudioDest = null;
+      if (micStream) { micStream.getTracks().forEach(track => track.stop()); micStream = null; }
     }
+
+    /* ---------- locução gravada (abertura e ganhador) ---------- */
+
+    const CLIP_KEY = 'bingo-locucao';
+    const CLIP_MAX_MS = 20000;
+    const clipBuffers = {};
+    let clipRecorder = null;
+
+    function readClips() {
+      try { return JSON.parse(localStorage.getItem(CLIP_KEY)) || {}; } catch (error) { return {}; }
+    }
+
+    function hasClip(name) {
+      return Boolean(readClips()[name]);
+    }
+
+    async function clipBuffer(name) {
+      const data = readClips()[name];
+      const context = audio();
+      if (!data || !context) return null;
+      if (clipBuffers[name] && clipBuffers[name].data === data) return clipBuffers[name].buffer;
+      const bytes = Uint8Array.from(atob(data.split(',')[1] || ''), character => character.charCodeAt(0));
+      const buffer = await context.decodeAudioData(bytes.buffer);
+      clipBuffers[name] = { data, buffer };
+      return buffer;
+    }
+
+    // Toca a locução gravada no alto-falante e também dentro do vídeo. Resolve quando termina.
+    async function playClip(name) {
+      try {
+        const buffer = await clipBuffer(name);
+        const context = audio();
+        if (!buffer || !context) return false;
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+        if (recordAudioDest) source.connect(recordAudioDest);
+        await new Promise(resolve => { source.onended = resolve; source.start(); });
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function renderClips() {
+      const clips = readClips();
+      document.querySelectorAll('.loc-row').forEach(row => {
+        const name = row.dataset.clip;
+        const recording = clipRecorder && clipRecorder.clip === name;
+        const rec = row.querySelector('.loc-rec');
+        rec.textContent = recording ? 'Parar' : clips[name] ? 'Gravar de novo' : 'Gravar';
+        rec.classList.toggle('recording', Boolean(recording));
+        row.querySelector('.loc-play').hidden = !clips[name] || recording;
+        row.querySelector('.loc-del').hidden = !clips[name] || recording;
+      });
+      document.getElementById('mic-in-video').checked = Boolean(game.micInVideo);
+    }
+
+    async function recordClip(name) {
+      if (clipRecorder) { clipRecorder.recorder.stop(); return; }
+      if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined') {
+        showToast('Este navegador não grava áudio. Abra no Chrome.', 5200);
+        return;
+      }
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      } catch (error) {
+        showToast('Libere o microfone para este site no navegador e tente de novo.', 5200);
+        return;
+      }
+      const chunks = [];
+      const recorder = new MediaRecorder(stream);
+      clipRecorder = { clip: name, recorder };
+      recorder.addEventListener('dataavailable', event => { if (event.data && event.data.size) chunks.push(event.data); });
+      recorder.addEventListener('stop', () => {
+        stream.getTracks().forEach(track => track.stop());
+        clearTimeout(clipRecorder && clipRecorder.timer);
+        clipRecorder = null;
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        if (!blob.size) { renderClips(); return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const clips = readClips();
+          clips[name] = reader.result;
+          try {
+            localStorage.setItem(CLIP_KEY, JSON.stringify(clips));
+            showToast('Locução gravada. Clique em Ouvir para conferir.');
+          } catch (error) {
+            showToast('A gravação ficou grande demais. Grave de novo, mais curta.', 5200);
+          }
+          renderClips();
+        };
+        reader.readAsDataURL(blob);
+      });
+      recorder.start();
+      clipRecorder.timer = setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, CLIP_MAX_MS);
+      renderClips();
+      showToast('Gravando... fale agora e clique em Parar quando terminar.', 4000);
+    }
+
+    document.querySelectorAll('.loc-row').forEach(row => {
+      const name = row.dataset.clip;
+      row.querySelector('.loc-rec').addEventListener('click', () => recordClip(name));
+      row.querySelector('.loc-play').addEventListener('click', () => { shutUp(); playClip(name); });
+      row.querySelector('.loc-del').addEventListener('click', event => {
+        const button = event.currentTarget;
+        if (button.dataset.armed !== '1') {
+          button.dataset.armed = '1';
+          button.textContent = 'Confirmar';
+          setTimeout(() => { button.dataset.armed = ''; button.textContent = 'Apagar'; }, 4000);
+          return;
+        }
+        button.dataset.armed = '';
+        button.textContent = 'Apagar';
+        const clips = readClips();
+        delete clips[name];
+        try { localStorage.setItem(CLIP_KEY, JSON.stringify(clips)); } catch (error) { /* ignora */ }
+        renderClips();
+      });
+    });
+    document.getElementById('mic-in-video').addEventListener('change', event => {
+      game.micInVideo = event.target.checked;
+      saveGame();
+      if (game.micInVideo && navigator.mediaDevices) {
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(stream => { stream.getTracks().forEach(track => track.stop()); showToast('Pronto: o seu microfone vai junto nos próximos vídeos.'); })
+          .catch(() => showToast('Libere o microfone para este site no navegador.', 5200));
+      }
+    });
 
     async function startRecording() {
       if (typeof MediaRecorder === 'undefined') {
@@ -4573,7 +4799,7 @@ var qrcode = function() {
         if (!blob.size) { showToast('A gravação saiu vazia, tente de novo.'); return; }
 
         const extension = finalType.includes('mp4') ? 'mp4' : 'webm';
-        const filename = `bingo-rodada-${String(game.round).padStart(2, '0')}.${extension}`;
+        const filename = `sorteio-rodada-${String(game.round).padStart(2, '0')}.${extension}`;
         const winners = results.length
           ? results.map(result => `${ordinal(result.slot + 1)} ${result.winner} (bola ${result.number})`).join(' · ')
           : '';
@@ -4725,7 +4951,17 @@ var qrcode = function() {
       startNewRound();
     });
 
+    // Ao sair do campo do WhatsApp, redesenha para mostrar o botão de aviso do ganhador.
+    ticketsGrid.addEventListener('change', event => {
+      if (event.target.closest('.ticket-phone') && results.length) { renderTickets(); renderResultSlots(); }
+    });
     ticketsGrid.addEventListener('input', event => {
+      const phoneInput = event.target.closest('.ticket-phone');
+      if (phoneInput) {
+        const ticket = ticketFor(Number(phoneInput.dataset.number));
+        if (ticket) { ticket.phone = phoneInput.value; saveGame(); }
+        return;
+      }
       const input = event.target.closest('.ticket-name');
       if (!input) return;
       const number = Number(input.dataset.number);
@@ -4767,7 +5003,7 @@ var qrcode = function() {
     function renderTicketsNote() {
       const sold = soldTickets().length;
       document.getElementById('cards-note').textContent = allSold()
-        ? 'Todas vendidas — o bingo já pode girar'
+        ? 'Todas vendidas — o sorteio já pode começar'
         : `Escreva o nome de quem comprou cada número · faltam ${TICKET_TOTAL - sold}`;
     }
 
@@ -4785,7 +5021,7 @@ var qrcode = function() {
         try {
           const blob = await readRecordingBlob(id);
           if (!blob) { showToast('Vídeo não encontrado.'); return; }
-          downloadBlob(blob, `bingo-rodada-${String(card.dataset.round).padStart(2, '0')}.${card.dataset.ext || 'webm'}`);
+          downloadBlob(blob, `sorteio-rodada-${String(card.dataset.round).padStart(2, '0')}.${card.dataset.ext || 'webm'}`);
           showToast('Baixando o vídeo...');
         } catch (error) {
           showToast('Não deu para baixar esse vídeo.');
@@ -4873,7 +5109,7 @@ var qrcode = function() {
         return;
       }
       setTicketTotal(count);
-      tickets = allNumbers.map(number => ticketFor(number) || { number, name: '', paid: false });
+      tickets = allNumbers.map(number => ticketFor(number) || { number, name: '', phone: '', paid: false });
       game.tickets = tickets;
       game.ticketCount = TICKET_TOTAL;
       buildBalls();
@@ -5017,7 +5253,7 @@ var qrcode = function() {
       return /^https:\/\/[^\s]+$/i.test(link) ? link : '';
     }
 
-    // Conta do Mercado Pago ligada a esta conta do bingo. O Access Token fica só no servidor
+    // Conta do Mercado Pago ligada a esta conta. O Access Token fica só no servidor
     // (tabela mp_contas + função mercadopago); aqui guardamos apenas o nome da conta.
     let mpAccount = null;
 
@@ -5046,7 +5282,7 @@ var qrcode = function() {
       status.classList.remove('error');
       status.textContent = mpAccount
         ? `Conectado à conta ${mpAccount.conta || 'do Mercado Pago'}. O checkout com Pix e cartão está ligado.`
-        : 'Cole o Access Token e clique em Conectar. Ele fica guardado em segurança no servidor do bingo e não aparece mais na tela.';
+        : 'Cole o Access Token e clique em Conectar. Ele fica guardado em segurança no servidor do sorteio e não aparece mais na tela.';
     }
 
     async function loadMpAccount() {
@@ -5088,11 +5324,13 @@ var qrcode = function() {
           if (!ticket) return;
           if (!ticket.name.trim()) {
             ticket.name = compra.nome;
+            ticket.phone = compra.telefone || '';
             ticket.paid = true;
             changed = true;
             showToast(`Cartela ${compra.numero} comprada pelo site: ${compra.nome}.`, 5200);
           } else if (ticket.name.trim().toLowerCase() === String(compra.nome).trim().toLowerCase()) {
             if (!ticket.paid) { ticket.paid = true; changed = true; }
+            if (!ticket.phone && compra.telefone) { ticket.phone = compra.telefone; changed = true; }
           } else {
             showToast(`Atenção: ${compra.nome} pagou a cartela ${compra.numero} pelo site, mas ela já está com ${ticket.name}.`, 8000);
           }
@@ -5146,7 +5384,7 @@ var qrcode = function() {
         if (!url) {
           const data = await callCheckout({
             acao: 'criar', ref, valor: game.ticketPrice.toFixed(2),
-            titulo: `Bingo Catarina Farma · Cartela ${number || 'teste'} · Rodada ${String(game.round).padStart(2, '0')}`,
+            titulo: `Sorteio Catarina Farma · Cartela ${number || 'teste'} · Rodada ${String(game.round).padStart(2, '0')}`,
             nome: ticket ? ticket.name.trim() : ''
           });
           url = data.link;
@@ -5175,7 +5413,7 @@ var qrcode = function() {
       } catch (error) {
         qrBox.innerHTML = '<div class="pay-wait">Não deu para falar com o checkout.</div>';
         status.textContent = window.claude
-          ? 'No link de prévia o navegador bloqueia o checkout. Abra o arquivo do bingo no Chrome.'
+          ? 'No link de prévia o navegador bloqueia o checkout. Abra o sistema no Chrome.'
           : `Não deu para criar o pagamento: ${error.message}`;
       }
     }
@@ -5286,6 +5524,21 @@ var qrcode = function() {
       renderTickets();
       renderStatus();
     }
+
+    function fillWaForm() {
+      document.getElementById('wa-message').value = game.waMessage || DEFAULT_WA_MESSAGE;
+    }
+    document.getElementById('wa-message').addEventListener('input', event => {
+      game.waMessage = event.target.value;
+      saveGame();
+    });
+    document.getElementById('wa-message').addEventListener('change', () => { if (results.length) { renderTickets(); renderResultSlots(); } });
+    document.getElementById('wa-reset').addEventListener('click', () => {
+      game.waMessage = DEFAULT_WA_MESSAGE;
+      fillWaForm();
+      saveGame();
+      if (results.length) { renderTickets(); renderResultSlots(); }
+    });
 
     function fillPayForm() {
       document.getElementById('pix-type').value = game.pay.type;
@@ -5410,7 +5663,7 @@ var qrcode = function() {
     const SUPABASE_ANON_KEY = 'sb_publishable_sMX6DL0nGs8BTrMf14ukPQ_MDOL3qM4';
     const SB_SETTINGS_KEY = 'bingo-supabase';
     // Domínio da plataforma: cada cliente vira <nome>.PLATFORM_DOMAIN. Troque quando tiver o domínio.
-    const PLATFORM_DOMAIN = 'seubingo.com.br';
+    const PLATFORM_DOMAIN = 'seusorteio.com.br';
     const RESERVED_SLUGS = ['www', 'app', 'admin', 'api', 'painel', 'bingo', 'suporte', 'mail', 'ftp', 'blog', 'static', 'cdn'];
 
     let sb = null;
@@ -5516,6 +5769,8 @@ var qrcode = function() {
       priceInput.value = game.ticketPrice > 0 ? game.ticketPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
       render();
       fillPayForm();
+      fillWaForm();
+      renderClips();
     }
 
     async function signedIn(user) {
@@ -5559,7 +5814,7 @@ var qrcode = function() {
       appliedCompras.clear();
       renderMpToken();
       showAuthStep('login');
-      authMessage('Você saiu. Entre de novo para usar o bingo.');
+      authMessage('Você saiu. Entre de novo para usar o sorteio.');
     }
 
     function scheduleCloudSave() {
@@ -5823,7 +6078,7 @@ var qrcode = function() {
 
     function publicSnapshot() {
       return {
-        nome: (currentUser && currentUser.user_metadata && currentUser.user_metadata.nome_loja) || (mySite && mySite.nome) || 'Bingo',
+        nome: (currentUser && currentUser.user_metadata && currentUser.user_metadata.nome_loja) || (mySite && mySite.nome) || 'Sorteio',
         rodada: game.round,
         estado: spinning ? 'girando' : spun ? 'resultado' : allSold() ? 'pronto' : 'vendendo',
         titulo: stageTitle,
@@ -5881,14 +6136,14 @@ var qrcode = function() {
       const data = site.publico || {};
       publicData = data;
       const held = new Set(Array.isArray(taken) ? taken : []);
-      const name = site.nome || data.nome || 'Bingo';
-      document.title = `${name} · Bingo ao vivo`;
+      const name = site.nome || data.nome || 'Sorteio';
+      document.title = `${name} · Sorteio ao vivo`;
       document.getElementById('pub-name').textContent = name;
-      document.getElementById('pub-round').textContent = `Bingo ao vivo · Rodada ${String(data.rodada || 1).padStart(2, '0')}`;
+      document.getElementById('pub-round').textContent = `Sorteio ao vivo · Rodada ${String(data.rodada || 1).padStart(2, '0')}`;
       const stateLabels = { vendendo: 'vendendo cartelas', pronto: 'vai começar', girando: 'girando agora', resultado: 'resultado' };
       document.getElementById('pub-state').textContent = stateLabels[data.estado] || 'ao vivo';
       document.getElementById('pub-live').classList.toggle('hot', data.estado === 'girando');
-      const titles = { vendendo: 'Garanta a sua cartela!', pronto: 'Todas vendidas. O sorteio vai começar!', girando: 'Girando o bingo...', resultado: 'Temos vencedores!' };
+      const titles = { vendendo: 'Garanta a sua cartela!', pronto: 'Todas vendidas. O sorteio vai começar!', girando: 'Girando o globo...', resultado: 'Temos vencedores!' };
       document.getElementById('pub-title').textContent = titles[data.estado] || data.titulo || 'Aguarde o sorteio';
       document.getElementById('pub-price').textContent = data.valor > 0
         ? `Cartela: ${Number(data.valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}${data.checkout && data.estado === 'vendendo' ? ' · escolha a sua abaixo' : ''}` : '';
@@ -6082,6 +6337,8 @@ var qrcode = function() {
     render();
     populateVoiceSelect();
     fillPayForm();
+    fillWaForm();
+    renderClips();
     saveGame();
     if (speechSupported() && typeof window.speechSynthesis.addEventListener === 'function') {
       window.speechSynthesis.addEventListener('voiceschanged', populateVoiceSelect);
