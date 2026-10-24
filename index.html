@@ -215,7 +215,7 @@ ul.clean{margin:0;padding-left:18px;display:grid;gap:6px}
 
 <script>
 (function(){
-const KEY='sorteios-proto-v1';
+const KEY='sorteios-prosul-v2';
 const COMPANY={nome:'Prosul Afiliado SJB',whats:'(11) 90000-0000',whatsLink:'5511900000000',email:'contato@exemplo.com.br',endereco:'Av. Exemplo, 1000 – Centro, São Paulo/SP',horario:'Seg a sex, 8h às 18h · Sáb, 8h às 12h · Assistência 24h'};
 const $=(s,el=document)=>el.querySelector(s);
 const $$=(s,el=document)=>[...el.querySelectorAll(s)];
@@ -235,23 +235,7 @@ let S;
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function load(){try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):null}catch(e){return null}}
 function seed(){
-  const now=Date.now(),H=3600e3;
-  const names=['Ana Paula Souza','Bruno Ferreira','Carla Mendes','Diego Rocha','Eduarda Lima','Fábio Nascimento','Gabriela Torres','Henrique Alves','Isabela Martins','João Pedro Costa','Karen Ribeiro','Lucas Oliveira','Mariana Santos','Nelson Pereira','Olívia Carvalho','Paulo Henrique Dias','Rafaela Gomes','Sérgio Barbosa','Tatiane Moreira','Vinícius Araújo','Wesley Cardoso','Yasmin Teixeira'];
   const st={cfg:{taxaPix:0.0099,taxaCartao:0.0499,taxaCartaoFixa:0.39,expiraMin:30},campaigns:[],orders:[],draws:[],ui:{open:null,page:0,drawCamp:null,style:'roleta'}};
-  st.campaigns.push({id:'c1',titulo:'Moto 0 km',premio:'Honda CG 160 Start 0 km, documentada',descricao:'Campanha de exemplo. Sorteio agendado e transmitido ao vivo.',preco:5,total:1000,maxPedido:200,modo:'agendado',drawAt:now+3*24*H,estilo:'roleta',status:'ativa',criada:now-10*24*H,autoFeito:false});
-  st.campaigns.push({id:'c2',titulo:'Jogo de pneus + revisão',premio:'4 pneus aro 14 e revisão completa na oficina parceira',descricao:'Campanha de exemplo com sorteio manual estilo bingo.',preco:2.5,total:300,maxPedido:50,modo:'manual',drawAt:null,estilo:'bingo',status:'ativa',criada:now-6*24*H,autoFeito:false});
-  const fill=(c,count)=>{
-    const free=shuffle(Array.from({length:c.total},(_,i)=>i+1));let k=0;
-    for(let i=0;i<count;i++){
-      const q=1+rnd(i%5===0?20:6),nums=free.slice(k,k+q);k+=q;
-      const r=rnd(100),status=r<78?'pago':r<90?'pendente':'cancelado';
-      const created=status==='pendente'?now-rnd(20)*60e3:now-rnd(9*24)*H;
-      const nm=names[rnd(names.length)];
-      st.orders.push({id:uid('P'),campaignId:c.id,nome:nm,fone:'119'+String(10000000+rnd(89999999)),numeros:status==='cancelado'?[]:nums,numerosOrig:nums,valor:+(q*c.preco).toFixed(2),metodo:rnd(100)<68?'pix':'cartao',status,criado:created,pagoEm:status==='pago'?created+rnd(30)*60e3:null,exemplo:true});
-      if(status==='cancelado')k-=q;
-    }
-  };
-  fill(st.campaigns[0],70);fill(st.campaigns[1],34);
   return st;
 }
 S=load()||seed();
@@ -313,10 +297,11 @@ function rSorteios(){
   el.innerHTML=`
   <div class="row between">
     <div><div class="eyebrow">Campanhas</div><h1>Concorra a prêmios para o seu carro</h1></div>
-    <button class="btn-a" id="newCamp">${showForm?'Fechar formulário':'+ Nova campanha (admin)'}</button>
+    <button class="btn-a" id="newCamp">${showForm?'Fechar formulário':'+ Nova campanha'}</button>
   </div>
-  <p class="demo-note">Protótipo: os pagamentos são simulados e os dados ficam salvos só neste navegador. As campanhas e pedidos já carregados são exemplos.</p>
+  <p class="demo-note">Protótipo: os pagamentos são simulados e os dados ficam salvos só neste navegador.</p>
   ${showForm?campForm():''}
+  ${S.campaigns.length?'':`<div class="panel" style="text-align:center;display:grid;gap:10px;justify-items:center;padding-block:36px"><h2>Nenhuma campanha cadastrada</h2><p class="muted">Clique em “Nova campanha” para cadastrar o primeiro sorteio: prêmio, preço por número e quantidade.</p>${showForm?'':'<button class="btn-p" id="newCamp2">Cadastrar primeira campanha</button>'}</div>`}
   <div class="grid g2">${S.campaigns.map(c=>{const st=campStats(c);return `
     <article class="panel camp">
       <div class="prize"><div class="ticket">${esc(c.titulo.trim()[0]||'#')}</div><div style="min-width:0"><h3>${esc(c.titulo)}</h3><p class="muted small">${esc(c.premio)}</p></div></div>
@@ -327,6 +312,7 @@ function rSorteios(){
       <button class="btn-p" data-open="${c.id}" ${c.status!=='ativa'?'disabled':''}>Escolher números</button>
     </article>`}).join('')}</div>`;
   $('#newCamp').onclick=()=>{showForm=!showForm;rSorteios()};
+  const n2=$('#newCamp2',el);if(n2)n2.onclick=()=>{showForm=true;rSorteios()};
   $$('[data-open]',el).forEach(b=>b.onclick=()=>{S.ui.open=b.dataset.open;S.ui.page=0;sel=new Set();save();rSorteios();window.scrollTo(0,0)});
   const f=$('#campForm',el);
   if(f){
@@ -512,7 +498,7 @@ function rPainel(){
     </table></div>
     ${list.length>150?`<p class="small muted">Mostrando os 150 mais recentes de ${int(list.length)}.</p>`:''}
   </div>
-  <div class="row"><button class="btn-sm" id="reset">Restaurar dados de exemplo</button><span class="small muted">Apaga tudo o que foi criado neste navegador.</span></div>`;
+  <div class="row"><button class="btn-sm" id="reset">Zerar todos os dados</button><span class="small muted">Apaga campanhas, pedidos e sorteios deste navegador.</span></div>`;
   $('#pf-camp').onchange=e=>{pf.camp=e.target.value;rPainel()};
   $('#pf-q').oninput=e=>{pf.q=e.target.value;clearTimeout(rPainel.t);rPainel.t=setTimeout(()=>{rPainel();const i=$('#pf-q');i.focus();i.setSelectionRange(i.value.length,i.value.length)},250)};
   $$('[data-st]',el).forEach(b=>b.onclick=()=>{pf.status=b.dataset.st;rPainel()});
@@ -522,8 +508,8 @@ function rPainel(){
     const was=o.status;o.status='cancelado';o.motivo=was==='pago'?'Estornado pelo admin':'Cancelado pelo admin';o.numeros=[];save();rPainel();toast('Pedido cancelado e números liberados')});
   $('#feeForm').onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target)),n=v=>Math.max(0,parseFloat(String(v).replace(',','.'))||0);
     S.cfg.taxaPix=n(d.pix)/100;S.cfg.taxaCartao=n(d.card)/100;S.cfg.taxaCartaoFixa=n(d.fixa);save();rPainel();toast('Taxas atualizadas')};
-  let armed=false;$('#reset').onclick=e=>{if(!armed){armed=true;e.target.textContent='Clique de novo para confirmar';setTimeout(()=>{armed=false;if(e.target.isConnected)e.target.textContent='Restaurar dados de exemplo'},3000);return}
-    S=seed();save();sel=new Set();pf={camp:'all',status:'all',q:''};rPainel();toast('Dados de exemplo restaurados')};
+  let armed=false;$('#reset').onclick=e=>{if(!armed){armed=true;e.target.textContent='Clique de novo para confirmar';setTimeout(()=>{armed=false;if(e.target.isConnected)e.target.textContent='Zerar todos os dados'},3000);return}
+    S=seed();save();sel=new Set();pf={camp:'all',status:'all',q:''};rPainel();toast('Dados zerados')};
 }
 
 /* ---------- 3. Sorteio ao vivo ---------- */
@@ -538,7 +524,7 @@ function rSorteio(){
   const el=$('#v-sorteio');
   if(!S.ui.drawCamp||!S.campaigns.some(c=>c.id===S.ui.drawCamp))S.ui.drawCamp=S.campaigns[0]?.id;
   const c=S.campaigns.find(x=>x.id===S.ui.drawCamp);
-  if(!c){el.innerHTML='<p>Crie uma campanha primeiro.</p>';return}
+  if(!c){el.innerHTML='<div class="panel" style="display:grid;gap:10px;justify-items:start"><h2>Nenhuma campanha para sortear</h2><p class="muted">Cadastre uma campanha e registre vendas pagas para liberar o sorteio.</p><button class="btn-p" data-go="sorteios">Cadastrar campanha</button></div>';return}
   const style=c.estilo,el2=eligible(c),cd=S.draws.filter(d=>d.campaignId===c.id).sort((a,b)=>a.em-b.em);
   const digits=String(c.total).length;
   const last=cd[cd.length-1];
