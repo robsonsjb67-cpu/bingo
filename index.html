@@ -41,7 +41,8 @@ p{margin:0}
 .logo{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:800;font-size:1.15rem;color:var(--ink);text-decoration:none;margin-right:auto}
 .logo svg{flex:none}
 .logoimg{display:block;height:46px;width:auto;background:#fff;border-radius:6px;padding:2px 4px}
-.aff{font:700 .72rem var(--f-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-left:1px solid var(--line);padding-left:10px}
+.aff{display:inline-flex;align-items:center;gap:6px;font:700 .7rem var(--f-body);letter-spacing:.06em;text-transform:uppercase;color:var(--brand);background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 8px;white-space:nowrap;-webkit-user-select:none;user-select:none}
+.aff::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent)}
 .logocard{position:relative;z-index:1;background:#fff;border-radius:14px;padding:22px 26px;display:grid;justify-items:center;gap:8px;width:min(78%,340px);box-shadow:0 12px 30px rgba(0,0,0,.18)}
 .logocard img{width:100%;max-width:240px;height:auto}
 .logocard span{font:800 .8rem var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:#0e5a44}
